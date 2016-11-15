@@ -1,0 +1,54 @@
+#!/bin/bash
+
+ulimit -Su 4000
+export LANG=C
+export LC_ALL=C
+
+STAREXEC=$1
+STARGENOME=$2
+FA=$3
+LIBEXEC=$4
+THREADS=$5
+
+TMPCHR=tmp_by_chr_$$
+
+mkdir "$TMPCHR"
+
+TMPCMP=gzip
+TMPEXT=gz
+if [ -x /usr/bin/lzop ]
+then
+  TMPCMP=/usr/bin/lzop
+  TMPEXT=lzop
+fi
+
+
+echo Commence STAR mapping run for mapability.
+date
+
+time "$STAREXEC" \
+--genomeDir "$STARGENOME" \
+--genomeLoad NoSharedMemory \
+--runThreadN $THREADS --outStd SAM --outSAMmode NoQS \
+--outSAMattributes None \
+--outFilterMultimapNmax 1 \
+--readFilesIn <("$LIBEXEC/generateReadsError.pl" 70 10 < "$FA") \
+| \
+awk -v tmpdir="$TMPCHR" -v tmpcmp="$TMPCMP" -v tmpext="$TMPEXT"  'BEGIN {FS="[\t!]"; OFS="\t"} (($8 == "70M") && ($3 == $6) && ($2 == $5)) {print $5, $6-1, $6+69 | ( tmpcmp " -c1 > " tmpdir "/" $5 ".bed." tmpext ) }'
+
+echo Completed STAR run.
+date
+echo Commence Coverage calculation.
+
+CHRLEN="$STARGENOME/chrNameLength.txt"
+
+time ls "$TMPCHR"/*.bed."$TMPEXT" | xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < {} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\" | awk 'BEGIN {FS=\"\t\"; OFS=\"\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > {}.exclusion"
+
+time cat "$TMPCHR"/*.exclusion | sort -S5G -k1,1 -k2,2n -k3,3n | gzip > MapabilityExclusion.bed.gz
+
+rm "$TMPCHR"/*bed."$TMPEXT".exclusion
+rm "$TMPCHR"/*bed."$TMPEXT"
+rmdir $TMPCHR
+
+echo Completed coverage exclusion calculation.
+date

@@ -1,0 +1,239 @@
+#!/usr/bin/perl
+use strict;
+use Cwd;
+use File::Spec;
+
+my $doDownload = 0;
+my $doCalculation = 0;
+
+my $mode = $ARGV[0];
+my $threads = $ARGV[1];
+my $STAREXEC = $ARGV[2];
+my $hint = $ARGV[3];
+my $basedir = $ARGV[4];
+my $ercc_file = $ARGV[5];
+my $non_polyA = $ARGV[6];
+my $blacklist = $ARGV[7];
+my ($script_volume, $script_dir, $script_name) = File::Spec->splitpath(__FILE__);
+$basedir = File::Spec->rel2abs($basedir);
+$script_dir = File::Spec->rel2abs($script_dir);
+if ($blacklist && length($blacklist)>0) {
+  $blacklist = File::Spec->rel2abs($blacklist);
+}else{
+  $blacklist = "";
+}
+if ($non_polyA && length($non_polyA)>0) {
+  $non_polyA = File::Spec->rel2abs($non_polyA);
+}else{
+  $non_polyA = "";
+}
+if ($ercc_file && length($ercc_file)>0) {
+  $ercc_file = File::Spec->rel2abs($ercc_file);
+}else{
+  $ercc_file = "";
+}
+
+if ($mode eq "BuildRef") {
+	$doDownload = 1;
+	$doCalculation = 1;
+}elsif ($mode eq "BuildRefDownload") {
+	$doDownload = 1;
+	$doCalculation = 0;
+}elsif ($mode eq "BuildRefProcess") {
+	$doDownload = 0;
+	$doCalculation = 1;
+}else {
+	die "Invalid mode specified. Valid options are: BuildRef / BuildRefDownload / BuildRefProcess.";
+}
+
+
+print 'Usage : ' . $0 . ' mode threads STAR-executable base_ftp_url_of_ensembl_genome+gtf output_directory(must not exist) additional_genome_reference(eg: ERCC) non_polyA_genes-as-bed region_blacklist-as-bed', "\n";
+print 'Usage example: ' . $0 . ' BuildRef 12 STAR "ftp://ftp.ensembl.org/pub/release-75/fasta/homo_sapiens/dna/" "IRFinder/REF/Human" "Refernce-ERCC.fa.gz" [non_polyA_genes.bed] [blacklist.bed]', "\n";
+
+
+
+sub getSingleFileFromDir($) {
+  my $dir = shift;
+  my $resultfile;
+  opendir DH, $dir;
+  while (my $file = readdir DH) {
+    next if ($file =~ /^\./);
+    if ($resultfile ne "") {
+      return undef; #Multiple files in folder.
+    }else{
+      $resultfile = $file;
+    }
+  }
+  return $resultfile;
+}
+
+
+if ($doDownload == 1) {
+	print "Trying to fetch dna.primary_assembly and GTF based on:\n$hint\n\n";
+
+	my $gtf_file = "";
+	my $genome_file = "";
+
+	if (! $hint =~ m/^(ftp|http)/ ) {
+	  print "Failed: not an http or ftp base\n";
+	  exit 1;
+	}
+
+	if ( -d $basedir ) {
+	  print "FATAL: Reference base dir already exists: $basedir\n";
+	  exit 1;
+	}
+	mkdir $basedir;
+	if (! -d $basedir) {
+	  print "FATAL: Failed to create reference base dir: $basedir\n";
+	  exit 1;
+	}
+	mkdir "$basedir/OriginalRef";
+
+	if (my ($base, $type, $species) = $hint =~ m!^(.*)(/fasta/|/gtf/)([^/]*)!) {
+	  my $randdir = "tmp_";
+	  for (0..7) { $randdir .= chr( int(rand(25) + 65) ); }
+	  mkdir "$basedir/$randdir";
+	  chdir "$basedir/$randdir";
+
+	  system('wget',$base.'/fasta/'.$species.'/dna/*.dna.primary_assembly.fa.gz');
+	  my $fa = getSingleFileFromDir("$basedir/$randdir");
+	  if (! $fa) {
+		system('wget',$base.'/fasta/'.$species.'/dna/*.dna.toplevel.fa.gz');
+		$fa = getSingleFileFromDir("$basedir/$randdir");
+		if (! $fa) {
+		  print "Failed to download fa.gz file.\n";
+		  exit 1;
+		}
+	  }
+	  $genome_file = "$basedir/OriginalRef/$fa";
+	  rename "$basedir/$randdir/$fa", $genome_file;
+
+	  system('wget',$base.'/gtf/'.$species.'/*.gtf.gz');
+	  my $gtf = getSingleFileFromDir("$basedir/$randdir");
+	  if (! $gtf) {
+		print "Failed to download gtf.gz file.\n";
+		exit 1;
+	  }
+	  $gtf_file = "$basedir/OriginalRef/$gtf";
+	  rename "$basedir/$randdir/$gtf", $gtf_file;
+	  chdir "$basedir";
+	  rmdir "$basedir/$randdir";
+
+		#system("$script_dir/BuildFullRef", $threads, $basedir, $genome_file, $gtf_file, $ercc_file, $non_polyA, $blacklist);
+		## Above script is now included inline below.
+
+		## FastA and GTF have now been downloaded and are available.
+		## -- next phases:
+		##   - Generate a filtered FA & GTF excluding odd chromosomes (eg: genome patches, partially duplicating existing parts of the reference) 
+		##   - build the STAR reference,
+		##   - generate Mapability index,
+		##   - final calculations.
+	
+		  my $chrraw = qx% gzip -dc "$genome_file" | awk '
+		BEGIN {FS=" "; OFS=" "; OUTPUT=0}
+		(\$0 ~ /^>/ ) {OUTPUT=0; print >> "$basedir/chrs.all.list"}
+		(\$0 ~ /^>/ && \$2 !~ /scaffold/ && \$4 == "REF") {OUTPUT=1; print substr(\$1,2)}
+		(OUTPUT==1) {print > "$basedir/genome.fa" }' | tee "$basedir/chrs.selected.list" %;
+
+		  if (length($ercc_file) > 0) {
+			chomp $chrraw;
+			if ($ercc_file =~ m/\.gz$/) {
+			  $chrraw .= "\n" . qx% gzip -dc "$ercc_file" | awk '
+		BEGIN {FS=" "; OFS=" "; OUTPUT=0}
+		(\$0 ~ /^>/ ) {OUTPUT=0; print >> "$basedir/chrs.all.list"}
+		(\$0 ~ /^>/ ) {OUTPUT=1; print substr(\$1,2)}
+		(OUTPUT==1) {print >> "$basedir/genome.fa" }' | tee -a "$basedir/chrs.selected.list" %;
+			}else{
+			  $chrraw .= "\n" . qx% cat "$ercc_file" | awk '
+		BEGIN {FS=" "; OFS=" "; OUTPUT=0}
+		(\$0 ~ /^>/ ) {OUTPUT=0; print >> "$basedir/chrs.all.list"}
+		(\$0 ~ /^>/ ) {OUTPUT=1; print substr(\$1,2)}
+		(OUTPUT==1) {print >> "$basedir/genome.fa" }' | tee -a "$basedir/chrs.selected.list" %;
+			}
+		  }
+
+		  my @chrs = split /\n/, $chrraw;
+		  my %chrexists;
+		  foreach (@chrs) {
+			$chrexists{$_}++;
+		  }
+
+		  open GTF, "gzip -dc '$gtf_file' |";
+		  open GTFOUT, ">$basedir/transcripts.gtf";
+		  while (<GTF>) {
+			chomp;
+			my $line = $_;
+			my ($chr, $junk) = split /\t/, $line, 2;
+			if ($chrexists{$chr} || $chr =~ m/^#/) {
+			  print GTFOUT $line, "\n";
+			}
+		  }
+		  close GTF;
+		  close GTFOUT;
+	}else{
+	  print "FATAL: could not identify a suitable base in the path to allow fetch of matching dna.primary_assemble.fa.gz and gtf.gz files\n";
+	  exit 1;
+	}
+}
+
+if ($doCalculation == 1) {
+
+	### Build the STAR reference ###
+	mkdir "$basedir/STAR" or die;
+	mkdir "$basedir/logSTARbuild" or die;
+	chdir "$basedir/logSTARbuild" or die;
+
+	# TODO -- perhaps should be user configurable.
+	my $sjdbOverlap = 150;
+
+	my $starresult = system(
+	$STAREXEC,
+	"--runMode", "genomeGenerate",
+	"--genomeDir", "$basedir/STAR",
+	"--genomeFastaFiles", "$basedir/genome.fa",
+	"--sjdbGTFfile", "$basedir/transcripts.gtf",
+	"--sjdbOverhang", $sjdbOverlap,
+	"--runThreadN", $threads,
+	'&>>', "log-star-build-ref.log"
+	);
+
+	print "Star genome build result: $starresult\n";
+
+	### Generate Mapability index ###
+	mkdir "$basedir/Mapability" or die;
+	chdir "$basedir/Mapability" or die;
+
+	my $mapresult = system(
+	"$script_dir/Mapability",
+	$STAREXEC,
+	"$basedir/STAR",
+	"$basedir/genome.fa",
+	$script_dir,
+	$threads,
+	'&>>', "log-mapability.log"
+	);
+
+	print "Mapability result: $mapresult\n";
+
+
+	### Run final calculations to produce IRFinder reference ###
+	mkdir "$basedir/IRFinder" or die;
+	chdir "$basedir/IRFinder" or die;
+
+
+	my $refresult = system(
+	"$script_dir/Build-BED-refs.sh",
+	"$basedir/transcripts.gtf",
+	"$basedir/STAR/chrNameLength.txt",
+	"$basedir/Mapability/MapabilityExclusion.bed.gz",
+	$script_dir,
+	$non_polyA,
+	$blacklist,
+	'&>>', "log-ref-build.log"
+	);
+
+	print "Ref build result: $refresult\n";
+	print "ALL DONE\n";
+	### DONE ###
+}

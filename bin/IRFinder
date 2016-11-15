@@ -1,0 +1,547 @@
+#!/bin/bash
+
+VERSION=1.1.0
+
+export LC_ALL=C
+export LANG=C
+
+function usage() {
+	echo "Usage: $0 -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
+	echo "Usage: $0 -m BAM -r ReferenceDir Unsorted.bam" >&2
+	echo "Usage: $0 -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/" >&2
+	echo "" >&2
+	echo "    -m RunMode. FastQ (default), BAM, BuildRef," >&2
+	echo "             BuildRefDownload (performs phase 1 of BuildRef only, requires Internet)," >&2
+	echo "             BuildRefProcess (performs phase 2 of BuildRef only)." >&2
+	echo "" >&2
+	echo "Parameters for BuildRef mode:" >&2
+	echo "  required:" >&2
+	echo "    ftp://... A base Ensembl URL from which reference and transcriptome will be downloaded." >&2
+	echo "    -r ReferenceDir. Directory should not yet exist, will be created." >&2
+	echo "  optional:" >&2
+	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
+	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
+	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2	
+	echo "" >&2
+	echo "Parameters for FastQ / BAM mode:" >&2
+	echo "  required:" >&2
+	echo "    raw_reads_1.fastq.gz: Either single or paired end fastq file." >&2
+	# TODO - we cannot currently accept fasta input to the trimmer (only fastq), probably should, believe STAR ignores quality anyway, and we strip it on output.
+	echo "    Unsorted.bam: Mapped output, with pairs as sequential records. Paired end must not be coordinate sorted." >&2
+	echo "    -r ReferenceDir. As built by the 'BuildRef' option." >&2
+	echo "  optional:" >&2
+	echo "   -a Adaptor sequence. 'none' to disable. Default: Illumina Universal is trimmed." >&2
+	echo "   -t Threads. Default is the number of physical CPUs" >&2
+	echo "   -d Output Directory. Default is the current directory." >&2
+	echo "   -s STAR memory mode. NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
+	echo "   -S STAR executable. Default is 'STAR'." >&2
+	echo "   -u. Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2
+	echo "            a novosort license is present." >&2
+	echo "   -M sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	exit 1
+}
+
+
+# === Defaults ===
+OUTPUTDIR=.
+RUNMODE=FastQ
+THREADS=0
+REF=
+STAREXEC=STAR
+STARMEMORYMODE=NoSharedMemory
+BUILDERCCFILE=
+BUILDROI=
+BUILDBLACK=
+BUILDHINT=
+SORTMEM=
+DOSORT=1
+ADAPT=
+ADAPTTRIM=1
+FASTQ=0
+
+LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
+
+
+if [ $# -eq 0 ]; then
+	usage
+fi
+
+while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:" opt; do
+	case $opt in
+		m)
+			if [[ $OPTARG == "BAM" || $OPTARG == "FastQ" || $OPTARG == "BuildRef" || $OPTARG == "BuildRefDownload" || $OPTARG == "BuildRefProcess" ]]; then
+				RUNMODE=$OPTARG
+			else
+				echo "Argument error: -m $OPTARG. Valid options for Mode are: BAM, FastQ, BuildRef, BuildRefDownload, BuildRefProcess. Default: FastQ" >&2
+				usage
+			fi
+			;;
+		r)
+			# Reference directory.
+			REF=$OPTARG
+			## Must be a directory. (or not exist ..? In case of BuildRef -- or should that be outputdir then?). Needs to be checked after all options are parsed.
+			;;
+		a)
+			if [[ $OPTARG == "none" || $OPTARG == "off" ]]; then
+				ADAPTTRIM=0
+			elif [[ ! $OPTARG =~ ^[ATGCN,]*$ ]]; then
+				echo "Argument error: -a $OPTARG. Adaptor may only contain [ATGCN]. Separate Adaptors with a comma for paired end." >&2
+				usage
+			else
+				ADAPT=$OPTARG
+			fi
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				usage
+			fi
+			THREADS=$OPTARG
+			;;
+		d)
+			OUTPUTDIR=$OPTARG
+			;;
+		s)
+			## STAR memory mode (must be from fixed list).
+			if [[ $OPTARG == "NoSharedMemory" || $OPTARG == "LoadAndKeep" || $OPTARG == "LoadAndRemove" ]]; then
+				STARMEMORYMODE=$OPTARG
+			else
+				echo "Argument error: -s $OPTARG. Valid options for STAR memory mode are: NoSharedMemory, LoadAndKeep, LoadAndRemove. Default: NoSharedMemory" >&2
+				usage
+			fi
+			;;
+		S)
+			## STAR executable. (must be executable!)
+			if [ -x "$OPTARG" -a ! -d "$OPTARG" ]; then
+				STAREXEC=$OPTARG
+			else
+				echo "Argument error: -S $OPTARG. STAR executable must be an executable program." >&2
+				usage
+			fi
+			;;
+		u)
+			DOSORT=0
+		    ;;
+		M)
+			#Max sort memory in MB.
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -M $OPTARG, maximum sort RAM in MB must be an integer." >&2
+				usage
+			fi
+			SORTMEM=$OPTARG
+			;;
+		e)
+			#ERCC file. (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -e $OPTARG. Specified ERCC/extra-reference file does not exist." >&2
+				usage
+			fi
+			BUILDERCCFILE=$OPTARG
+			;;
+		b)
+			#Blacklist local file (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -b $OPTARG. Specified blacklist file does not exist." >&2
+				usage
+			fi
+			BUILDBLACK=$OPTARG
+			;;
+		R)
+			#ROI local file. (must be a file)
+			if [ ! -f "$OPTARG" ]; then
+				echo "Argument error: -R $OPTARG. Specified ROI file does not exist." >&2
+				usage
+			fi
+			BUILDROI=$OPTARG
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			usage
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			usage
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+#echo $@  #The remaining arguments.
+#echo $#  #The number of remaining arguments. 
+
+if [ ! "$REF" ]; then
+	echo "Argument error: -r is required." >&2
+	usage	
+fi
+
+MEMK=`awk '($1 ~ /^MemTotal:/) {print $2}' < /proc/meminfo`
+MEMM=$(($MEMK/1000))
+
+# Check the compute environment is appropriate for STAR.
+if [[ "$RUNMODE" != "BAM" && "$RUNMODE" != "BuildRefDownload" ]]; then
+	if [ $MEMM -lt 32000 ]; then
+		echo "System limitation: Minimum required RAM is 32GB. This software uses STAR for RNA mapping. RAM requirement is approximately 30GB for the human genome." >&2
+		echo "  RunModes: BAM and BuildRefDownload, may be completed on servers with less RAM." >&2
+		exit 2
+	fi
+
+	"$STAREXEC" --version &>/dev/null
+	if [ ! $? -eq 0 ]; then
+		echo "Error: STAR version is too old. --version parameter returns an error. Minimum version of 2.4.0 required." >&2
+		exit 2
+	fi
+fi
+
+# Auto detect CPUs.
+if [[ $THREADS == 0 ]]; then
+	THREADS=`awk 'BEGIN {FS=":"} ($0 ~ /^physical id/ ) { printf $2 " --"} ($0 ~ /^core id/) {print $2}' < /proc/cpuinfo | sort -u | wc -l`
+	if [ ! -n $THREADS -o $THREADS -eq 0 ]; then
+    	    	# If physical CPU detection doesn't work for some reason, detect virtual CPUs (includes hyperthreading instances).
+		THREADS=`grep -c ^processor /proc/cpuinfo`
+	fi
+fi
+
+if [[ "$RUNMODE" == "BuildRef" ]]; then
+	if [ ! $# -eq 1 ]; then
+		echo "Argument error: in run mode BuildRef, provide a single ftp URL. $# arguments found." >&2
+		usage
+	fi
+	BUILDHINT=$1
+	if [[ "$BUILDHINT" != ftp* ]]; then
+		echo "Argument error: A single ftp url is required to find and download genome fasta and gtf files. eg: ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/." >&2
+		usage
+ 	fi
+	if [ -d "$REF" ]; then
+		echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
+		usage
+	fi
+	echo "Launching reference build process. The full build should take at least one hour."
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+elif [[ "$RUNMODE" == "BuildRefDownload" ]]; then
+	if [ ! $# -eq 1 ]; then
+		echo "Argument error: in run mode BuildRef, provide a single ftp URL. $# arguments found." >&2
+		usage
+	fi
+	BUILDHINT=$1
+	if [[ "$BUILDHINT" != ftp* ]]; then
+		echo "Argument error: A single ftp url is required to find and download genome fasta and gtf files. eg: ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/." >&2
+		usage
+ 	fi
+	if [ -d "$REF" ]; then
+		echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
+		usage
+	fi
+	echo "Launching reference build download process."
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+elif [[ "$RUNMODE" == "BuildRefProcess" ]]; then
+	if [ ! -f "$REF/genome.fa" ] || [ ! -f "$REF/transcripts.gtf" ]; then
+		echo "Argument error: -r $REF. Reference directory must exist and contain genome.fa and transcripts.gtf files. Use the BuildRefDownload run mode to create these." >&2
+		usage
+	fi
+	if [ -d "$REF/STAR" ] || [ -d "$REF/Mapability" ] || [ -d "$REF/IRFinder" ]; then
+		echo "Argument error: -r $REF. Will not overwrite. It appears BuildRefProcess has already been run for this reference. Reference directory must not contain STAR, Mapability or IRFinder directories." >&2
+		usage
+	fi
+	echo "Launching reference build process. The full build should take at least one hour."
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+else
+	## Either fastq or BAM expected -- check other relevant parameters.
+	if [[ "$RUNMODE" == "FastQ" ]]; then
+		if [ $# -eq 1 ]; then
+			FASTQ=1
+			#Single End
+			if [ ! -f "$1" ] && [ ! -p "$1" ]; then
+				echo "Argument error: FastQ file $1 does not exist (single fastq provided)." >&2
+				usage
+			fi
+			if [[ "$ADAPTTRIM" == 1 ]]; then
+				if [ ! $ADAPT ]; then
+					ADAPT="AGATCGGAAG"
+				elif [[ $ADAPT =~ ^[ATGC]+$ ]]; then
+					ADAPT=$ADAPT
+				else
+					echo "Argument error: -a $ADAPT. Single end mode, just one adaptor needs to be provided. eg: AGATCGGAAG." >&2
+					usage
+				fi
+			fi
+		elif [ $# -eq 2 ]; then
+			FASTQ=2
+			#Paired End.
+			if [ ! -f "$1" ] && [ ! -p "$1" ]; then
+				echo "Argument error: FastQ file $1 does not exist (paired fastq provided)." >&2
+				usage
+			fi
+			if [ ! -f "$2" ] && [ ! -p "$2" ]; then
+				echo "Argument error: FastQ file $2 does not exist (paired fastq provided)." >&2
+				usage
+			fi
+			if [[ "$ADAPTTRIM" == 1 ]]; then
+				if [ ! $ADAPT ]; then
+					ADAPT="AGATCGGAAG AGATCGGAAG"
+				elif [[ $ADAPT =~ ^[ATGCN]+,[ATGCN]+$ ]]; then
+					## two adaptors are present, good, now translate that comma into a space / dual parameters.
+					ADAPT=${ADAPT//,/ }
+				else
+					echo "Argument error: -a $ADAPT. Paired end mode, two adaptors need to be provided separated by a comma. eg: AGATCGGAAG,AGATCGGAAG." >&2
+					usage
+				fi
+			fi
+		else
+			echo "Argument error: in run mode $RUNMODE, provide either one or two fastq files. $# arguments found." >&2
+			usage
+		fi
+	elif [[ "$RUNMODE" == "BAM" ]]; then
+		if [ ! $# -eq 1 ]; then
+			echo "Argument error: in run mode BAM, provide a single BAM as input. $# arguments found." >&2
+			usage
+		fi
+	else
+		echo "ERROR: coding error. This condition should not occur. At line: $LINENO in $0" >&2
+		usage
+	fi
+
+	if [ ! -f "$REF/IRFinder/ref-cover.bed" ]; then
+		echo "Argument error: -r $REF, Does not appear to be a valid IRFinder reference. Could not find $REF/IRFinder/ref-cover.bed" >&2
+		usage
+	fi
+
+	# Output directory OK?
+	if [ -d "$OUTPUTDIR" ]; then
+		if [ -e "$OUTPUTDIR/IRFinder-IR-nondir.txt" -o -e "$OUTPUTDIR/irfinder.stdout" ]; then
+			echo "Argument error: -d $OUTPUTDIR, output directory contains files from a previous IRFinder run. Will not overwrite." >&2
+			usage
+		fi
+	else
+		mkdir "$OUTPUTDIR"
+		if [ ! -d "$OUTPUTDIR" ]; then
+			echo "Argument error: Output directory $OPTARG does not exist, and could not be created." >&2
+			usage
+		fi
+	fi
+
+	if [[ $DOSORT == 1 ]]; then
+		#User has not disabled sort. Check if we have novosort to allow efficient sorting. Will not sort unless an efficient sort program is available.
+		NOVOSORTOK=`which novosort 2>/dev/null`
+		NOVOSORTOK=`dirname $NOVOSORTOK 2>/dev/null`
+		if [ "$NOVOSORTOK" ]; then
+			if [ -f $NOVOSORTOK/novoalign.lic ]; then
+				NOVOSORTOK=$NOVOSORTOK/novoalign.lic
+			elif [ -f $NOVOSORTOK/novosort.lic ]; then
+				NOVOSORTOK=$NOVOSORTOK/novosort.lic
+			else
+				NOVOSORTOK=""
+				DOSORT=0
+			fi
+			if [ "$NOVOSORTOK" ]; then
+				if [ `awk 'BEGIN {FS="\t"} (NR==1) {print $2}' < $NOVOSORTOK | awk 'BEGIN {FS="/"} {print $3 $2 $1}'` -lt `date +"%Y%m%d"` ]; then
+					echo "WARNING: Novosort license has expired (in file $NOVOSORTOK), not sorting output." >&2
+					NOVOSORTOK=""
+					DOSORT=0
+				fi
+			else
+				DOSORT=0
+			fi
+		else
+			DOSORT=0
+		fi
+	fi
+
+	# Calculate a sensible max-memory for sort based on system resources.
+	# Assume 30GB used by STAR. 4GB peak use by irfinder.
+	# Allow 2GB unused. Let sort have the remainder (but max 10GB, min 0.5GB).
+	if [[ $DOSORT == 1 && ! "$SORTMEM" ]]; then
+		if [[ "$RUNMODE" == "BAM" ]]; then
+			SORTMEM=$(($MEMK-6000))
+		else
+			SORTMEM=$(($MEMK-36000))		
+		fi
+		if [[ $SORTMEM < 500 ]]; then
+			SORTMEM=500
+		fi
+		if [[ $SORTMEM > 10000 ]]; then
+			SORTMEM=10000
+		fi
+	fi
+	
+	echo "IRFinder version: $VERSION" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder start: " `date` >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder runmode: $RUNMODE" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder user@host: $USER @ $HOSTNAME" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder working dir: " `pwd` >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder reference: $REF" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder file 1: $1" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "IRFinder file 2: $2" >>"$OUTPUTDIR/irfinder.stdout"
+	echo "---" >>"$OUTPUTDIR/irfinder.stdout"
+
+	if [[ "$RUNMODE" == "FastQ" && "$FASTQ" == 1 ]]; then
+		# Additional command line parameters for the main commands below.
+		EXTRAADAPT=
+		EXTRAREADFILESCOMMAND=		
+
+		if [[ "$ADAPTTRIM" == 1 ]]; then
+			EXTRAADAPT="--clip3pAdapterSeq $ADAPT"
+		fi
+		if [[ "$1" == *.gz ]]; then
+			EXTRAREADFILESCOMMAND="--readFilesCommand gzip -dc"
+		fi
+
+		if [[ "$DOSORT" == 1 ]]; then
+			touch "$OUTPUTDIR/sync.sort.$$"
+
+			"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+			--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+			--outSAMstrandField intronMotif \
+			--outFileNamePrefix "${OUTPUTDIR}/" \
+			--outSAMunmapped None --outSAMmode NoQS \
+			--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+			--readFilesIn "$1" $EXTRAREADFILESCOMMAND $EXTRAADAPT \
+			| tee "$OUTPUTDIR/Unsorted.bam" \
+			| gzip -cd \
+			| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+			"$REF/IRFinder/ref-sj.ref" \
+			"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+			>(novosort --index --threads $THREADS --ram ${SORTMEM}M -o "$OUTPUTDIR/sorted.frag.bam" - &>>"$OUTPUTDIR/novosort.log"; rm "$OUTPUTDIR/sync.sort.$$") \
+			>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
+
+			while [ -f "$OUTPUTDIR/sync.sort.$$" ] ; do sleep 2 ; done
+		else
+
+			"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+			--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+			--outSAMstrandField intronMotif \
+			--outFileNamePrefix "${OUTPUTDIR}/" \
+			--outSAMunmapped None --outSAMmode NoQS \
+			--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+			--readFilesIn "$1" $EXTRAREADFILESCOMMAND $EXTRAADAPT \
+			| tee "$OUTPUTDIR/Unsorted.bam" \
+			| gzip -cd \
+			| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+			"$REF/IRFinder/ref-sj.ref" \
+			"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+			"$OUTPUTDIR/unsorted.frag.bam" \
+			>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
+		
+		fi
+	elif [[ "$RUNMODE" == "FastQ" && "$FASTQ" == 2 ]]; then		
+		if [[ "$ADAPTTRIM" == 1 ]]; then
+			FIFO1="$OUTPUTDIR/Reads_1.fifo"
+			FIFO2="$OUTPUTDIR/Reads_2.fifo"
+			mkfifo "$FIFO1"
+			mkfifo "$FIFO2"
+			
+			if [[ "$1" == *.gz ]]; then
+				# $ADAPT must not be in quotes. It should be space separated 2 parameters at present.
+				"$LIBEXEC/trim" <(gzip -cd "$1") <(gzip -cd "$2") "$FIFO1" "$FIFO2" $ADAPT >>"$OUTPUTDIR/trim.log" &
+			else
+				"$LIBEXEC/trim" "$1" "$2" "$FIFO1" "$FIFO2" $ADAPT >>"$OUTPUTDIR/trim.log" &
+			fi
+
+			if [[ "$DOSORT" == 1 ]]; then
+				touch "$OUTPUTDIR/sync.sort.$$"
+
+				"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+				--outSAMstrandField intronMotif \
+				--outFileNamePrefix "${OUTPUTDIR}/" \
+				--outSAMunmapped None --outSAMmode NoQS \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--readFilesIn "$FIFO1" "$FIFO2" \
+				| tee "$OUTPUTDIR/Unsorted.bam" \
+				| gzip -cd \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				>(novosort --index --threads $THREADS --ram ${SORTMEM}M -o "$OUTPUTDIR/sorted.frag.bam" - &>>"$OUTPUTDIR/novosort.log"; rm "$OUTPUTDIR/sync.sort.$$") \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
+				
+				while [ -f "$OUTPUTDIR/sync.sort.$$" ] ; do sleep 2 ; done			
+			else
+				"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+				--outSAMstrandField intronMotif \
+				--outFileNamePrefix "${OUTPUTDIR}/" \
+				--outSAMunmapped None --outSAMmode NoQS \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--readFilesIn "$FIFO1" "$FIFO2" \
+				| tee "$OUTPUTDIR/Unsorted.bam" \
+				| gzip -cd \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				"$OUTPUTDIR/unsorted.frag.bam" \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"			
+			fi		
+
+			rm "$FIFO1"
+			rm "$FIFO2"
+		else
+			# No trimming.
+			EXTRAREADFILESCOMMAND=
+			if [[ "$1" == *.gz ]]; then
+				EXTRAREADFILESCOMMAND="--readFilesCommand gzip -dc"
+			fi
+
+			if [[ "$DOSORT" == 1 ]]; then
+				touch "$OUTPUTDIR/sync.sort.$$"
+
+				"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+				--outSAMstrandField intronMotif \
+				--outFileNamePrefix "${OUTPUTDIR}/" \
+				--outSAMunmapped None --outSAMmode NoQS \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--readFilesIn "$1" "$2" $EXTRAREADFILESCOMMAND \
+				| tee "$OUTPUTDIR/Unsorted.bam" \
+				| gzip -cd \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				>(novosort --index --threads $THREADS --ram ${SORTMEM}M -o "$OUTPUTDIR/sorted.frag.bam" - &>>"$OUTPUTDIR/novosort.log"; rm "$OUTPUTDIR/sync.sort.$$") \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"			
+
+				while [ -f "$OUTPUTDIR/sync.sort.$$" ] ; do sleep 2 ; done
+			else
+				"$STAREXEC" --genomeLoad $STARMEMORYMODE --runThreadN $THREADS \
+				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
+				--outSAMstrandField intronMotif \
+				--outFileNamePrefix "${OUTPUTDIR}/" \
+				--outSAMunmapped None --outSAMmode NoQS \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--readFilesIn "$1" "$2" $EXTRAREADFILESCOMMAND \
+				| tee "$OUTPUTDIR/Unsorted.bam" \
+				| gzip -cd \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				"$OUTPUTDIR/unsorted.frag.bam" \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"						
+			fi		
+		fi
+	elif [[ "$RUNMODE" == "BAM" ]]; then
+			if [[ "$DOSORT" == 1 ]]; then
+				touch "$OUTPUTDIR/sync.sort.$$"
+
+				gzip -cd "$1" \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				>(novosort --index --threads $THREADS --ram ${SORTMEM}M -o "$OUTPUTDIR/sorted.frag.bam" - &>>"$OUTPUTDIR/novosort.log"; rm "$OUTPUTDIR/sync.sort.$$") \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
+
+				while [ -f "$OUTPUTDIR/sync.sort.$$" ] ; do sleep 2 ; done
+			else
+				gzip -cd "$1" \
+				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
+				"$REF/IRFinder/ref-sj.ref" \
+				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
+				"$OUTPUTDIR/unsorted.frag.bam" \
+				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
+			fi
+	else
+		echo "ERROR: coding error. This condition should not occur. At line: $LINENO in $0" >&2
+		usage
+	fi
+
+	"$LIBEXEC/warnings" "$OUTPUTDIR"
+fi
