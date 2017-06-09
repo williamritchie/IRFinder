@@ -117,9 +117,10 @@ cat <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "dir/" $4; print}' < tmp-dir.IntronCo
 
 echo "Build Ref 11"
 
+#in Bedtools v2.26, chromosome-length file need to be sorted (sort -k1,1) according to chromosome names before being passed to complement function
 bedtools slop -b 10000 -g "$CHRLEN" -i tmp.all.annotations \
 | sort -t $'\t' -S 500M -k1,1 -k2,2n -k3,3n | bedtools merge -d 1000 -i stdin \
-| bedtools complement -i stdin -g "$CHRLEN" \
+| bedtools complement -i stdin -g <(sort -k1,1 "$CHRLEN") \
 | awk 'BEGIN {FS="\t"; OFS="\t"} (length($1)<=2) {$4 = "Intergenic/" $1; print $1, $2, $3, $4}' > intergenic.ROI.bed
 
 

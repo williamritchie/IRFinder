@@ -42,7 +42,8 @@ echo Commence Coverage calculation.
 
 CHRLEN="$STARGENOME/chrNameLength.txt"
 
-time ls "$TMPCHR"/*.bed."$TMPEXT" | xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < {} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\" | awk 'BEGIN {FS=\"\t\"; OFS=\"\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > {}.exclusion"
+#add awk 'NR==1{chr=\$1;print}\$1==chr{print}' |
+time ls "$TMPCHR"/*.bed."$TMPEXT" | xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < {} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\"| awk 'NR==1{chr=\$1;print}\$1==chr{print}' | awk 'BEGIN {FS=\"\t\"; OFS=\"\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > {}.exclusion"
 
 time cat "$TMPCHR"/*.exclusion | sort -S5G -k1,1 -k2,2n -k3,3n | gzip > MapabilityExclusion.bed.gz
 
