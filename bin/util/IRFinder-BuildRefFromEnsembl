@@ -109,7 +109,7 @@ if ($doDownload == 1) {
 	  $genome_file = "$basedir/OriginalRef/$fa";
 	  rename "$basedir/$randdir/$fa", $genome_file;
 
-	  system('wget',$base.'/gtf/'.$species.'/*.gtf.gz');
+	  system('wget',$base.'/gtf/'.$species.'/*[0-9].gtf.gz');
 	  my $gtf = getSingleFileFromDir("$basedir/$randdir");
 	  if (! $gtf) {
 		print "Failed to download gtf.gz file.\n";

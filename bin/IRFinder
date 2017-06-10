@@ -1,11 +1,12 @@
 #!/bin/bash
 
-VERSION=1.1.0
+VERSION=1.2.0
 
 export LC_ALL=C
 export LANG=C
 
 function usage() {
+        echo "IRFinder version: $VERSION" >&2
 	echo "Usage: $0 -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
 	echo "Usage: $0 -m BAM -r ReferenceDir Unsorted.bam" >&2
 	echo "Usage: $0 -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/" >&2
@@ -35,10 +36,11 @@ function usage() {
 	echo "   -d Output Directory. Default is the current directory." >&2
 	echo "   -s STAR memory mode. NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
 	echo "   -S STAR executable. Default is 'STAR'." >&2
-	echo "   -u. Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2
+	echo "   -u Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2
 	echo "            a novosort license is present." >&2
-	echo "   -M sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
-	exit 1
+	echo "   -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "   -v Version number of current IRFinder." >&2
+        exit 1
 }
 
 
@@ -66,7 +68,7 @@ if [ $# -eq 0 ]; then
 	usage
 fi
 
-while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:" opt; do
+while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 	case $opt in
 		m)
 			if [[ $OPTARG == "BAM" || $OPTARG == "FastQ" || $OPTARG == "BuildRef" || $OPTARG == "BuildRefDownload" || $OPTARG == "BuildRefProcess" ]]; then
@@ -155,6 +157,10 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:" opt; do
 			fi
 			BUILDROI=$OPTARG
 			;;
+                v)
+                        echo "IRFinder version: $VERSION" >&2
+                        exit
+                        ;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
 			usage
