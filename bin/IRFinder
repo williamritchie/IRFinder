@@ -9,21 +9,30 @@ function usage() {
         echo "IRFinder version: $VERSION" >&2
 	echo "Usage: $0 -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
 	echo "Usage: $0 -m BAM -r ReferenceDir Unsorted.bam" >&2
-	echo "Usage: $0 -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/" >&2
+	echo "Usage: $0 -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-89/gtf/mus_musculus/Mus_musculus.GRCm38.89.gtf.gz" >&2
 	echo "" >&2
+        echo "    -v Show version number of current IRFinder." >&2
 	echo "    -m RunMode. FastQ (default), BAM, BuildRef," >&2
 	echo "             BuildRefDownload (performs phase 1 of BuildRef only, requires Internet)," >&2
 	echo "             BuildRefProcess (performs phase 2 of BuildRef only)." >&2
 	echo "" >&2
 	echo "Parameters for BuildRef mode:" >&2
 	echo "  required:" >&2
-	echo "    ftp://... A base Ensembl URL from which reference and transcriptome will be downloaded." >&2
+	echo "    ftp://... A base Ensembl URL to a (gzipped) gtf file" >&2
 	echo "    -r ReferenceDir. Directory should not yet exist, will be created." >&2
 	echo "  optional:" >&2
 	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
 	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
 	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2	
 	echo "" >&2
+        echo "Parameters for BuildRefProcess mode:" >&2
+        echo "  required:" >&2
+        echo "    -r ReferenceDir. Directory should already contain EXACT files named 'genome.fa' and 'transcripts.gtf' (case-sensitive) for genome and transcriptome annotations respectively." >&2
+        echo "  optional:" >&2
+        echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
+        echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
+        echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2
+        echo "" >&2
 	echo "Parameters for FastQ / BAM mode:" >&2
 	echo "  required:" >&2
 	echo "    raw_reads_1.fastq.gz: Either single or paired end fastq file." >&2
@@ -31,15 +40,14 @@ function usage() {
 	echo "    Unsorted.bam: Mapped output, with pairs as sequential records. Paired end must not be coordinate sorted." >&2
 	echo "    -r ReferenceDir. As built by the 'BuildRef' option." >&2
 	echo "  optional:" >&2
-	echo "   -a Adaptor sequence. 'none' to disable. Default: Illumina Universal is trimmed." >&2
-	echo "   -t Threads. Default is the number of physical CPUs" >&2
-	echo "   -d Output Directory. Default is the current directory." >&2
-	echo "   -s STAR memory mode. NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
-	echo "   -S STAR executable. Default is 'STAR'." >&2
-	echo "   -u Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2
-	echo "            a novosort license is present." >&2
-	echo "   -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
-	echo "   -v Version number of current IRFinder." >&2
+	echo "    -a Adaptor sequence. 'none' to disable. Default: Illumina Universal is trimmed." >&2
+	echo "    -t Threads. Default is the number of physical CPUs" >&2
+	echo "    -d Output Directory. Default is the current directory." >&2
+	echo "    -s STAR memory mode. NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
+	echo "    -S STAR executable. Default is 'STAR'." >&2
+	echo "    -u Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2 
+        echo "       a novosort license is present." >&2
+	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
         exit 1
 }
 
