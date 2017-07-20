@@ -1,17 +1,3 @@
-gm_mean = function(x, na.rm=TRUE, zero.propagate = FALSE){
-  if(any(x < 0, na.rm = TRUE)){
-    return(NaN)
-  }
-  if(zero.propagate){
-    if(any(x == 0, na.rm = TRUE)){
-      return(0)
-    }
-    exp(mean(log(x), na.rm = na.rm))
-  } else {
-    exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
-  }
-}
-
 DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
     res=c()
     libsz=c()
@@ -19,7 +5,7 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
     if (irtest[1,1]=="Chr"){irtest=irtest[-1,]}
     irnames=unname(apply(as.matrix(irtest),1,FUN=function(x){return(paste0(x[4],"/",x[1],":",x[2],"-",x[3],":",x[6]))}))
     n=1
-    for (i in as.vector(files$V1)){
+    for (i in filePaths){
         print(paste0("processing file ",n," at ",i))
         irtab=read.table(i)
         if (irtab[1,1]=="Chr"){irtab=irtab[-1,]}
@@ -36,19 +22,21 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
     }
     res.rd=round(res)
     libsz.rd=round(libsz)
-    colnames(res)=as.vector(designMatrix[,1])
-    rownames(res)=irnames
-    colnames(libsz)=as.vector(designMatrix[,1])
-    rownames(libsz)=irnames
+    colnames(res.rd)=as.vector(designMatrix[,1])
+    rownames(res.rd)=irnames
     colnames(libsz.rd)=as.vector(designMatrix[,1])
     rownames(libsz.rd)=irnames
-    dd = DESeqDataSetFromMatrix(countData = res.rd, colData = designMatrix, design = designFormula)
-    colnames(dd)=as.vector(designMatrix[,1])
+    
+    ir=c(rep("IR",dim(designMatrix)[1]),rep("Splice",dim(designMatrix)[1]))
+    group=rbind(designMatrix,designMatrix)
+    group$IRFinder=ir
+    group$IRFinder=factor(group$IRFinder,levels=c("Splice","IR"))
+    
+    counts.IRFinder=cbind(res.rd,libsz.rd)
+    
+    dd = DESeqDataSetFromMatrix(countData = counts.IRFinder, colData = group, design = designFormula)
+    sizeFactors(dd)=rep(1,dim(group)[1])
     rownames(dd)=irnames
-    gm=apply(libsz.rd,1,gm_mean)
-    normFactors <- libsz / gm
-    normFactors[normFactors==0]=1
-    normalizationFactors(dd) <- normFactors
     sp=libsz-res
     final=list(dd,res,sp)
     names(final)=c("DESeq2Object","IntronDepth","SpliceDepth")
