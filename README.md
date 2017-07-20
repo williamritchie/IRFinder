@@ -3,6 +3,10 @@ Detecting intron retention from RNA-Seq experiments
 
 For information on installing and running the software please consult the wiki
 
+**1.2.1:**
+1. Improved the performance of DESeq2-based GLM analysis for differential IR. This new approach should improve the estimation of dispersion. Normal splicing from IRFinder result is now used as a variable in the GLM, instead of using the value of normal splicing as an offset. This approach is adapted from [detection of allele-specific expression](http://rpubs.com/mikelove/ase) from Michael Love. See Wiki page for details.
+2. Updated some out-of-date usage information
+
 **1.2.0:**
 1. IRFinder is now compatible with GLM-based analysis. This is achieved by passing IRFinder result to DESeq2 using the function in bin/DESeq2Constructor.R. See Wiki page for details  
 2. Fixed the conflict with latest version "bedtools complement" that used to cause failure in preparing IRFinder reference  
