@@ -22,9 +22,9 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
     }
     res.rd=round(res)
     libsz.rd=round(libsz)
-    colnames(res.rd)=as.vector(designMatrix[,1])
+    colnames(res.rd)=paste("intronDepth",as.vector(designMatrix[,1]),sep=".")
     rownames(res.rd)=irnames
-    colnames(libsz.rd)=as.vector(designMatrix[,1])
+    colnames(libsz.rd)=paste("totalSplice",as.vector(designMatrix[,1]),sep=".")
     rownames(libsz.rd)=irnames
     
     ir=c(rep("IR",dim(designMatrix)[1]),rep("Splice",dim(designMatrix)[1]))
