@@ -1,7 +1,7 @@
 # IRFinder
 Detecting intron retention from RNA-Seq experiments
 
-For information on installing and running the software please consult the wiki
+For information on installing and running the software please consult the [wiki page](https://github.com/williamritchie/IRFinder/wiki)
 
 **1.2.2:**
 1. In GLM-based differential IR comparison, fixed an error caused by duplicated row names when creating DESeq2 object with a version of DESeq2 later than 1.10.
