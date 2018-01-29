@@ -90,6 +90,12 @@ for $id (
 		if (!( $trans_type && length($trans_type)>0)) {
 			($trans_type) = $attr=~ /gene_biotype "([^"]+)"/;
 		}
+                if (!( $trans_type && length($trans_type)>0)) {
+                        ($trans_type) = $attr=~ /transcript_type "([^"]+)"/;
+                }
+                if (!( $trans_type && length($trans_type)>0)) {
+                        ($trans_type) = $attr=~ /gene_type "([^"]+)"/;
+                }
 		# sort by pos
 		my @ex = sort {
 			$a->[3] <=> $b->[3]

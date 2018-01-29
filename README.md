@@ -5,10 +5,10 @@ For information on installing and running the software please consult the [wiki 
 
 **1.2.4**
 1. In the GLM-based method for differential IR comparison, now the orginal matrix for DESeq2 is now made up by IR depth and correct splicing depth. In the previous versions, the latter one is the sum of splicing depth and IR depth. This change is supposed to give a smoother dispersion estimation across all introns.
-    
-**1.2.3**
-1. IRFinder now supports GTF attribution tags `gene_type` and `transcript_type` upon the original requirement for typical Ensembl tags `gene_biotype` and `transcript_biotype`. Either of these two pairs is required to correctly build IRFinder reference.
 
+**1.2.3:**
+1. IRFinder now supports GTF attribution tags `gene_type` and `transcript_type` upon the original requirement for typical Ensembl tags `gene_biotype` and `transcript_biotype`. Either of these two pairs is required to correctly build IRFinder reference.    
+    
 **1.2.2:**
 1. In GLM-based differential IR comparison, fixed an error caused by duplicated row names when creating DESeq2 object with a version of DESeq2 later than 1.10.
 
