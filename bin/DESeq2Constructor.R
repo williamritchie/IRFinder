@@ -17,7 +17,7 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
         tmp2=as.numeric(as.vector(irtab[,19]))
         tmp3=tmp1+tmp2
         res=cbind(res,tmp1)
-        libsz=cbind(libsz,tmp3)
+        libsz=cbind(libsz,tmp2)
         n=n+1
     }
     res.rd=round(res)
@@ -37,7 +37,7 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
     dd = DESeqDataSetFromMatrix(countData = counts.IRFinder, colData = group, design = designFormula)
     sizeFactors(dd)=rep(1,dim(group)[1])
     rownames(dd)=irnames
-    sp=libsz-res
+    sp=libsz
     final=list(dd,res,sp)
     names(final)=c("DESeq2Object","IntronDepth","SpliceDepth")
     return(final)
