@@ -301,8 +301,8 @@ int CoverageBlocks::WriteOutput(std::ostream *os) const {
 
 int CoverageBlocksIRFinder::WriteOutput(std::ostream *os, const JunctionCount &JC, const SpansPoint &SP, int directionality) const {
 	// Custom output function - related to the IRFinder needs
-	uint recordNumber = 0;
-	
+        *os << "Chr\tStart\tEnd\tName\tNull\tStrand\tExcludedBases\tCoverage\tIntronDepth\tIntronDepth25Percentile\tIntronDepth50Percentile\tIntronDepth75Percentile\tExonToIntronReadsLeft\tExonToIntronReadsRight\tIntronDepthFirst50bp\tIntronDepthLast50bp\tSpliceLeft\tSpliceRight\tSpliceExact\tIRratio\tWarnings\n";
+	uint recordNumber = 0;	
 	for (auto BEDrec : BEDrecords) {
 		recordNumber++;
 		// if name indicates it is a Dir/Non-dir record of interest - output it.
