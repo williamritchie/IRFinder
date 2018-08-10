@@ -1,7 +1,7 @@
 # IRFinder
 Detecting intron retention from RNA-Seq experiments
 
-[Manual](https://github.com/williamritchie/IRFinder/wiki)
+[User Manual](https://github.com/williamritchie/IRFinder/wiki)
 
 **1.2.5**
 1. Headers are now correctly added to output files `IRFinder-IR-dir.txt` and `IRFinder-IR-nondir.txt`.
