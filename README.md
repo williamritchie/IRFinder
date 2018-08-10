@@ -1,7 +1,10 @@
 # IRFinder
 Detecting intron retention from RNA-Seq experiments
 
-For information on installing and running the software please consult the [wiki page](https://github.com/williamritchie/IRFinder/wiki)
+[User Manual](https://github.com/williamritchie/IRFinder/wiki)
+
+**1.2.5**
+1. Headers are now correctly added to output files `IRFinder-IR-dir.txt` and `IRFinder-IR-nondir.txt`.
 
 **1.2.4**
 1. In the GLM-based method for differential IR comparison, now the orginal matrix for DESeq2 is now made up by IR depth and correct splicing depth. In the previous versions, the latter one is the sum of splicing depth and IR depth. This change is supposed to give a smoother dispersion estimation across all introns.
