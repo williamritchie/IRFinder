@@ -2,6 +2,7 @@ OBJECTS := FragmentBlocks.o ReadBlockProcessor.o CoverageBlock.o ReadBlockProces
 SOURCES=$(wildcard *.cpp)
 LDFLAGS :=
 LDFLAGS_static := -static -static-libgcc
+#LDFLAGS_static :=-L/apps/source/glibc/lib/lib
 LDFLAGS_GDB :=
 OPTIMFLAGS :=
 OPTIMFLAGS1 :=
