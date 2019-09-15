@@ -80,9 +80,9 @@ sort -t $'\t' -S 1G -k1,1 -k2,2n -k3,3n -k6,6
 }
 
 echo "Build Ref 4"
-bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileDir) | "$LIBEXEC/IntronExclusion.pl" >(cat > tmp.50) >(cat > tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -u > tmp-dir.IntronCover.bed
+bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileDir) | "$LIBEXEC/IntronExclusion.pl" >(cat > tmp.50) >(cat > tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-dir.IntronCover.bed
 echo "Build Ref 5"
-bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileNondir) | "$LIBEXEC/IntronExclusion.pl" >(cat >> tmp.50) >(cat >> tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -u > tmp-nd.IntronCover.bed
+bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileNondir) | "$LIBEXEC/IntronExclusion.pl" >(cat >> tmp.50) >(cat >> tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-nd.IntronCover.bed
 echo "Build Ref 6"
 echo "Build Ref 7"
 
