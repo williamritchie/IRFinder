@@ -3,6 +3,13 @@ Detecting intron retention from RNA-Seq experiments
 
 [User Manual](https://github.com/williamritchie/IRFinder/wiki)
 
+**1.2.6**
+1. IRFinder now keeps introns with the same effective regions as separate entries in the reference.    
+2. IRFinder now automatically checks if the reference preparation stage generates empty reference files, which indicates process failure.    
+3. The R object genreated by Differential IR Analysis script now includes an additional slot named "MaxSplice", which represents the maximum splice reads at either end of introns. Each value is the maximum value between Column 17 and 18 in the IR quantification output.    
+4. During differential IR analysis, values in "MaxSplice" are now used as the denominators in the GLM, instead of using the values of Column 19 in the IR quantification output. This makes the IR ratio in the differential IR analysis more consistent with the values of Column 20 in the IR quantification output.    
+5. User manual has been updated.    
+    
 **1.2.5**
 1. Headers are now correctly added to output files `IRFinder-IR-dir.txt` and `IRFinder-IR-nondir.txt`.
 
