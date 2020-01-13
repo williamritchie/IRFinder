@@ -1,6 +1,7 @@
-DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
+DESeqDataSetFromIRFinder = function(filePaths,designMatrix,designFormula){
     res=c()
     libsz=c()
+    spl=c()
     irtest=read.table(filePaths[1])
     if (irtest[1,1]=="Chr"){irtest=irtest[-1,]}
     irnames=unname(apply(as.matrix(irtest),1,FUN=function(x){return(paste0(x[4],"/",x[1],":",x[2],"-",x[3],":",x[6]))}))
@@ -16,30 +17,36 @@ DESeqDataSetFromIRFinder <- function(filePaths,designMatrix,designFormula){
         tmp1=as.numeric(as.vector(irtab[,9]))
         tmp2=as.numeric(as.vector(irtab[,19]))
         tmp3=tmp1+tmp2
+        tmp4=as.numeric(as.vector(irtab[,17]))
+        tmp5=as.numeric(as.vector(irtab[,18]))
+        tmp6=max(tmp4,tmp5)
         res=cbind(res,tmp1)
         libsz=cbind(libsz,tmp2)
+        spl=cbind(spl,tmp6)
         n=n+1
     }
     res.rd=round(res)
     libsz.rd=round(libsz)
+    spl.rd=round(spl)
     colnames(res.rd)=paste("intronDepth",as.vector(designMatrix[,1]),sep=".")
     rownames(res.rd)=irnames
     colnames(libsz.rd)=paste("totalSplice",as.vector(designMatrix[,1]),sep=".")
     rownames(libsz.rd)=irnames
+    colnames(spl.rd)=paste("maxSplice",as.vector(designMatrix[,1]),sep=".")
+    rownames(spl.rd)=irnames
     
     ir=c(rep("IR",dim(designMatrix)[1]),rep("Splice",dim(designMatrix)[1]))
     group=rbind(designMatrix,designMatrix)
     group$IRFinder=ir
     group$IRFinder=factor(group$IRFinder,levels=c("Splice","IR"))
     
-    counts.IRFinder=cbind(res.rd,libsz.rd)
+    #counts.IRFinder=cbind(res.rd,libsz.rd)
+    counts.IRFinder=cbind(res.rd,spl.rd)
     
     dd = DESeqDataSetFromMatrix(countData = counts.IRFinder, colData = group, design = designFormula)
     sizeFactors(dd)=rep(1,dim(group)[1])
     rownames(dd)=irnames
-    sp=libsz
-    final=list(dd,res,sp)
-    names(final)=c("DESeq2Object","IntronDepth","SpliceDepth")
+    final=list(dd,res,libsz,spl)
+    names(final)=c("DESeq2Object","IntronDepth","SpliceDepth","MaxSplice")
     return(final)
 }
-

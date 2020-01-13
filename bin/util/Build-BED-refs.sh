@@ -80,19 +80,18 @@ sort -t $'\t' -S 1G -k1,1 -k2,2n -k3,3n -k6,6
 }
 
 echo "Build Ref 4"
-bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileDir) | "$LIBEXEC/IntronExclusion.pl" >(cat > tmp.50) >(cat > tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -u > tmp-dir.IntronCover.bed
+bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileDir) | "$LIBEXEC/IntronExclusion.pl" >(cat > tmp.50) >(cat > tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-dir.IntronCover.bed
 echo "Build Ref 5"
-bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileNondir) | "$LIBEXEC/IntronExclusion.pl" >(cat >> tmp.50) >(cat >> tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -u > tmp-nd.IntronCover.bed
+bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileNondir) | "$LIBEXEC/IntronExclusion.pl" >(cat >> tmp.50) >(cat >> tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-nd.IntronCover.bed
+#echo "Build Ref 6"
 echo "Build Ref 6"
-echo "Build Ref 7"
-
 
 sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.read-continues | uniq > ref-read-continues.ref
 
 #awk 'BEGIN {FS = "[\t/]"; OFS = "\t"} {print $1, $8, $9, $6}' < tmp-dir.IntronCover.bed | sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k4,4 -u > ref-sj.ref
 cut -f 1,2,3,6 < introns.unique.bed | sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k4,4 -u > ref-sj.ref
 
-echo "Build Ref 8"
+#echo "Build Ref 8"
 
 
 # Workaround bug in bedtools merge when dealing with directional data (introduced in latest version of bedtools)
@@ -101,21 +100,21 @@ echo "Build Ref 8"
 #<(awk 'BEGIN {FS="\t"; OFS="\t"} ($6 == "-")' < tmp.coding.genes | sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k6,6 -u | bedtools merge -i stdin | awk 'BEGIN {FS="\t"; OFS="\t"} {print $1, $2, $3, "G-", 0, "-"}' ) \
 #| sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k6,6 -u > coding.genes.merged.bed
 
-echo "Build Ref 9"
+#echo "Build Ref 9"
 
 #bedtools intersect -S -v -wa -a coding.genes.merged.bed -b <(bedtools slop -b 5000 -i exclude.directional.bed -g "$CHRLEN") | awk 'BEGIN {FS="\t"; OFS="\t"} {print $1, $2, $3, "G"$6, $5, "+"; print $1, $2, $3, "G"$6, $5, "-"}' > ref-genes-dir-clean.bed
 # awk protein coding -- create description for G+ or G-, but output both directions. The result of these counts indicates whether the sequencing was directional or not.
 
 #cat bed.exons.exclude.anno-coding | awk 'BEGIN {FS="\t"; OFS="\t"} (($3-$2) < 120) {print}' > ref-short-exons.bed 
 
-echo "Build Ref 10"
+echo "Build Ref 7"
 
 cat <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "dir/" $4; print}' < tmp-dir.IntronCover.bed) \
   <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "nd/" $4; print}' < tmp-nd.IntronCover.bed) \
   <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "skip"; print}' < tmp.50) \
 | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 | uniq > ref-cover.bed
 
-echo "Build Ref 11"
+echo "Build Ref 8"
 
 #in Bedtools v2.26, chromosome-length file need to be sorted (sort -k1,1) according to chromosome names before being passed to complement function
 bedtools slop -b 10000 -g "$CHRLEN" -i tmp.all.annotations \
@@ -124,36 +123,70 @@ bedtools slop -b 10000 -g "$CHRLEN" -i tmp.all.annotations \
 | awk 'BEGIN {FS="\t"; OFS="\t"} (length($1)<=2) {$4 = "Intergenic/" $1; print $1, $2, $3, $4}' > intergenic.ROI.bed
 
 
-echo "Build Ref 12"
+echo "Build Ref 9"
 
 if [ -n "$OPTNONPOLYA" ]
 then
 	if [[ "$OPTNONPOLYA" == *.gz ]]
 	then
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed <(gzip -cd "$OPTNONPOLYA") | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-		echo "Build Ref 13a"
+		echo "Build Ref 10a"
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.ROI.rRNA.bed) -b <(gzip -cd "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) >> tmp.ROI.combined.bed
-		echo "Build Ref 14a"
+		echo "Build Ref 11a"
 		gzip -cd < "$OPTNONPOLYA" | awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "NonPolyA/" $1 "/" $2 "/" $3; print $1, $2, $3, $4}' >> tmp.ROI.combined.bed
-		echo "Build Ref 15a"
+		echo "Build Ref 12a"
 	else
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-		echo "Build Ref 13b"
+		echo "Build Ref 10b"
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.ROI.rRNA.bed) -b <(cat "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) >> tmp.ROI.combined.bed
-		echo "Build Ref 14b"
+		echo "Build Ref 11b"
 		awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "NonPolyA/" $1 "/" $2 "/" $3; print $1, $2, $3, $4}' < "$OPTNONPOLYA" >> tmp.ROI.combined.bed
-		echo "Build Ref 15b"
+		echo "Build Ref 12b"
 	fi
 else
 	bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-	echo "Build Ref 13c"
+	echo "Build Ref 10c"
 	cat tmp.ROI.rRNA.bed >> tmp.ROI.combined.bed
-	echo "Build Ref 14c"
+	echo "Build Ref 11c"
 fi
 sort -t $'\t' -S 500M -k1,1 -k2,2n -k3,3n < tmp.ROI.combined.bed > ref-ROI.bed
 
+ENDSTAT=0
+if [ ! -s exclude.directional.bed ]
+then
+    ENDSTAT=1
+    echo "Error: exclude.directional.bed is empty."
+fi
+if [ ! -s exclude.omnidirectional.bed ]
+then
+    ENDSTAT=1
+    echo "Error: exclude.omnidirectional.bed is empty."
+fi
+if [ ! -s introns.unique.bed ]
+then
+    ENDSTAT=1
+    echo "Error: introns.unique.bed is empty."
+fi
+if [ ! -s ref-cover.bed ]
+then
+    ENDSTAT=1
+    echo "Error: ref-cover.bed is empty."
+fi
+if [ ! -s ref-read-continues.ref ]
+then
+    ENDSTAT=1
+    echo "Error: ref-read-continues.ref is empty."
+fi
+if [ ! -s ref-sj.ref ]
+then
+    ENDSTAT=1
+    echo "Error: ref-sj.ref is empty."
+fi
 
-rm tmp.50 tmp-dir.IntronCover.bed tmp-nd.IntronCover.bed tmp.read-continues tmp.candidate.introns tmp.exons.exclude tmp.all.annotations tmp.reversed.genes tmp.ROI.rRNA.bed tmp.ROI.combined.bed
-
-
-echo "Build Ref 16 - COMPLETE"
+if [ $ENDSTAT = 1]
+then
+    echo "FAILED"
+else
+    rm tmp.50 tmp-dir.IntronCover.bed tmp-nd.IntronCover.bed tmp.read-continues tmp.candidate.introns tmp.exons.exclude tmp.all.annotations tmp.reversed.genes tmp.ROI.rRNA.bed tmp.ROI.combined.bed
+    echo "COMPLETE"
+fi
