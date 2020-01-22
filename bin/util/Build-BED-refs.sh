@@ -183,7 +183,7 @@ then
     echo "Error: ref-sj.ref is empty."
 fi
 
-if [ $ENDSTAT = 1]
+if [ $ENDSTAT = 1 ]
 then
     echo "FAILED"
 else
