@@ -19,7 +19,7 @@ DESeqDataSetFromIRFinder = function(filePaths,designMatrix,designFormula){
         tmp3=tmp1+tmp2
         tmp4=as.numeric(as.vector(irtab[,17]))
         tmp5=as.numeric(as.vector(irtab[,18]))
-        tmp6=max(tmp4,tmp5)
+        tmp6=pmax(tmp4,tmp5, na.rm=T)
         res=cbind(res,tmp1)
         libsz=cbind(libsz,tmp2)
         spl=cbind(spl,tmp6)
