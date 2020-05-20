@@ -7,12 +7,14 @@ Detecting intron retention from RNA-Seq experiments
 New features:    
 1. New `BuildRefFromSTARRef` mode. This allows users to use an existing STAR reference to build IRFinder reference, making the IRFinder result more consistent and comparable with other RNASeq analysis derived from STAR alignment. It also significantly reduces the total preparation time. This new mode also tries to automatically figure out the original FASTA and GTF files used to generate the existing STAR reference. Call `IRFinder -h` for more details.    
 2. `BuildRef` and `BuildRefProcess` mode now support `-j` option to parse an integer that changes the default value of `--sjdbOverhang` argument in STAR.    
-3. `FASTQ` mode now supports `-y` option to parse a string as extra alignment arguments to STAR when IRFinder quantifies intron retention.    
+3. `FASTQ` mode now supports `-y` option to parse a string as extra alignment arguments to STAR when IRFinder quantifies intron retention.   
+     
 Improvements:    
 1. `BAM` mode now outputs a full BAM file in "Unsorted.bam", instead of a BAM file with a trimmed QS column.   
 2. IRFinder does not automatically generate "unsorted.frag.bam" to save disk space and to avoid redundancy to "Unsorted.bam". Instead, IRFinder now provides a tool at `bin/TrimBAM4IGV` to generate this kind of trimmed BAM file to facilitate visualization purpose in IGV.     
 3. Re-design of standard output information during IRFinder reference preparation. It is easier to recognize occured errors now.    
 4. Usage information now can be viewed by `-h` option.     
+     
 Bug fixes:    
 1. The mapability calculation during the IRFinder reference preparation stage has been re-designed. The previous algorithm encountered buffer size issues when dealing with genomes with a huge amount of chromosomes/scaffolds. This has been fixed. Please note, the new algorithm requires `samtools` (>=1.4) executable binary ready in $PATH.    
 2. Since Perl 5.28.0, `sort '_mergesort'` is no longer supported. IRFinder now checks the Perl version and uses `sort` functions correspondingly.    
