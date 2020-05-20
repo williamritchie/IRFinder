@@ -5,7 +5,7 @@ Detecting intron retention from RNA-Seq experiments
 
 **1.3.0**    
 New features:    
-1. New `BuildRefFromSTARRef` mode. This allows users to use an existing STAR reference to build IRFinder reference, making the IRFinder result more consistent and comparable with other RNASeq analysis derived from STAR alignment. It also significantly reduces the total preparation time. This new mode also tries to automatically figure out the original FASTA and GTF files used to generate the existing STAR reference. Call `IRFinder -h` for more details.    
+1. New `BuildRefFromSTARRef` mode. This allows users to use an existing STAR reference to build IRFinder reference, which significantly reduces the total preparation time. This new mode also tries to automatically figure out the original FASTA and GTF files used to generate the existing STAR reference. Call `IRFinder -h` for more details.    
 2. `BuildRef` and `BuildRefProcess` mode now support `-j` option to parse an integer that changes the default value of `--sjdbOverhang` argument in STAR.    
     
 Improvements:    
