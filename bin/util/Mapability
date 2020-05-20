@@ -10,9 +10,9 @@ FA=$3
 LIBEXEC=$4
 THREADS=$5
 
-TMPCHR=tmp_by_chr_$$
+TMPBED=tmp_$$
 
-mkdir "$TMPCHR"
+mkdir "$TMPBED"
 
 TMPCMP=gzip
 TMPEXT=gz
@@ -23,33 +23,55 @@ then
 fi
 
 
-echo Commence STAR mapping run for mapability.
-date
+#echo ""
+echo "<Phase 2: Mapability Calculation>"
+date +"%b %d %T ... mapping genome fragments back to genome..."
 
-time "$STAREXEC" \
+"$STAREXEC" \
 --genomeDir "$STARGENOME" \
 --genomeLoad NoSharedMemory \
 --runThreadN $THREADS --outStd SAM --outSAMmode NoQS \
 --outSAMattributes None \
 --outFilterMultimapNmax 1 \
 --readFilesIn <("$LIBEXEC/generateReadsError.pl" 70 10 < "$FA") \
-| \
-awk -v tmpdir="$TMPCHR" -v tmpcmp="$TMPCMP" -v tmpext="$TMPEXT"  'BEGIN {FS="[\t!]"; OFS="\t"} (($8 == "70M") && ($3 == $6) && ($2 == $5)) {print $5, $6-1, $6+69 | ( tmpcmp " -c1 > " tmpdir "/" $5 ".bed." tmpext ) }'
+> genome_fragments.sam
 
-echo Completed STAR run.
-date
-echo Commence Coverage calculation.
+date +"%b %d %T ... sorting aligned genome fragments..."
 
-CHRLEN="$STARGENOME/chrNameLength.txt"
+samtools sort -@ "$THREADS" genome_fragments.sam > genome_fragments.bam
 
-#add awk 'NR==1{chr=\$1;print}\$1==chr{print}' |
-time ls "$TMPCHR"/*.bed."$TMPEXT" | xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < {} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\"| awk 'NR==1{chr=\$1;print}\$1==chr{print}' | awk 'BEGIN {FS=\"\t\"; OFS=\"\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > {}.exclusion"
+date +"%b %d %T ... indexing aligned genome fragments..."
 
-time cat "$TMPCHR"/*.exclusion | sort -S5G -k1,1 -k2,2n -k3,3n | gzip > MapabilityExclusion.bed.gz
+samtools index -@ "$THREADS" genome_fragments.bam
 
-rm "$TMPCHR"/*bed."$TMPEXT".exclusion
-rm "$TMPCHR"/*bed."$TMPEXT"
-rmdir $TMPCHR
+date +"%b %d %T ... filtering aligned genome fragments by chromosome/scaffold..."
 
-echo Completed coverage exclusion calculation.
-date
+cat "$STARGENOME/chrName.txt" | \
+    xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "samtools view genome_fragments.bam {}|awk -v tmpdir=\"$TMPBED\" -v tmpcmp=\"$TMPCMP\" -v tmpext=\"$TMPEXT\" 'BEGIN{FS=\"[\\t!]\"; OFS=\"\\t\"}{if ((\$8 == \"70M\") && (\$3 == \$6) && (\$2 == \$5)) {print \$5, \$6-1, \$6+69 | (tmpcmp \" -c1 > \" tmpdir \"/\" \$5 \".bed.\" tmpext ) }}END{close( (tmpcmp \" -c1 > \" tmpdir \"/\" \$5 \".bed.\" tmpext ))}'"
+
+date +"%b %d %T ... merging filtered genome fragments..."
+
+find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|xargs --max-args 1 zcat >> genome_fragments.unsorted.bed
+
+date +"%b %d %T ... calculating regions for exclusion..."
+
+bedtools genomecov -i genome_fragments.unsorted.bed -bga -g "$STARGENOME/chrNameLength.txt" | \
+    awk 'BEGIN{FS=OFS="\t";chr="random"}($1!=chr){chr=$1}($1==chr){print}' | \
+    awk 'BEGIN {FS=OFS="\t"} ($4 < 5) {print $1, $2, $3}' | \
+    bedtools merge -i stdin | \
+    sort -S5G -k1,1 -k2,2n -k3,3n| \
+    gzip > MapabilityExclusion.bed.gz
+
+#ls "$TMPBED"/*.bed."$TMPEXT" | xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < {} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\"| awk 'NR==1{chr=\$1;print}\$1==chr{print}' | awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > \"$TMPEXCL/\"{}.exclusion"
+
+#find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|cut -d"/" -f3|xargs --max-args 1 --max-procs "$THREADS" -I{} bash -c "\"$TMPCMP\" -cd < \"$TMPBED\"/{} | bedtools genomecov -i stdin -bga -g \"$CHRLEN\"| awk 'NR==1{chr=\$1;print}\$1==chr{print}' | awk 'BEGIN {FS=OFS=\"\\t\"} (\$4 < 5) {print \$1, \$2, \$3}' | bedtools merge -i stdin > \"$TMPEXCL\"/{}.exclusion"
+
+#cat "$TMPEXCL"/*.exclusion | sort -S5G -k1,1 -k2,2n -k3,3n | gzip > MapabilityExclusion.bed.gz
+
+date +"%b %d %T ... cleaning temporary files..."
+
+find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|xargs --max-args 1 --max-procs "$THREADS" rm
+rm genome_fragments.*
+rm Log.*
+rm SJ.out.tab
+rmdir "$TMPBED"

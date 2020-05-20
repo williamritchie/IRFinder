@@ -26,8 +26,14 @@
 
 use Data::Dumper;
 use sort 'stable';
-use sort '_mergesort';
-## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
+@versions = $];
+$vmain = int($versions[0]);
+$vsub = int($versions[1]);
+if ($vmain==5 && $vsub<28000){
+	use sort '_mergesort';
+	## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
+}
+
 
 $in = shift @ARGV;
 

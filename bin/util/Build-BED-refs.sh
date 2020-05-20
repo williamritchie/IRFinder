@@ -18,7 +18,9 @@ OPTBLACKLISTEXCL=$6
 NEARGENE="-l 5000 -r 1000 -s"
 # Gene has been reversed before being sloped -- effectively adding an exclusion zone 5000 bp downstream of a reverse sense gene (more likely to over-run this direction than to have an early TSS).
 
-echo "Build Ref 1"
+#echo ""
+echo "<Phase 3: IRFinder Reference Preparation>"
+date +"%b %d %T ... building Ref 1..."
 
 "$LIBEXEC/gtf2bed-custom.pl" "$GTF" \
 | \
@@ -42,7 +44,7 @@ sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 < tmp.candidate.introns
 
 sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 < tmp.exons.exclude | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -u | bedtools slop -b 5 -i stdin -g "$CHRLEN" | sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k6,6 > exclude.directional.bed
 
-echo "Build Ref 2"
+date +"%b %d %T ... building Ref 2..."
 
 gzip -dc "$MAPABILITYEXCL" | sort -t $'\t' -S 500M -k1,1 -k2,2n -k3,3n -u | bedtools merge -i stdin -d 9 | awk 'BEGIN {FS="\t"; OFS="\t"} (($3-$2)>=10) { print $1, $2, $3, "M" }' > exclude.omnidirectional.bed
 
@@ -59,7 +61,7 @@ then
 fi
 
 ### BUG in bedtools merge in latest bedtools. Doesn't honour strand (or at least, drops it from the output which is pretty much the same thing)!
-echo "Build Ref 3"
+date +"%b %d %T ... building Ref 3..."
 
 function excludeFileDir {
 cat \
@@ -79,12 +81,12 @@ cat \
 sort -t $'\t' -S 1G -k1,1 -k2,2n -k3,3n -k6,6
 }
 
-echo "Build Ref 4"
+date +"%b %d %T ... building Ref 4..."
 bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileDir) | "$LIBEXEC/IntronExclusion.pl" >(cat > tmp.50) >(cat > tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-dir.IntronCover.bed
-echo "Build Ref 5"
+date +"%b %d %T ... building Ref 5..."
 bedtools intersect -s -sorted -wao -a introns.unique.bed -b <(excludeFileNondir) | "$LIBEXEC/IntronExclusion.pl" >(cat >> tmp.50) >(cat >> tmp.read-continues) | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 -k4,4 -u > tmp-nd.IntronCover.bed
 #echo "Build Ref 6"
-echo "Build Ref 6"
+date +"%b %d %T ... building Ref 6..."
 
 sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.read-continues | uniq > ref-read-continues.ref
 
@@ -107,14 +109,14 @@ cut -f 1,2,3,6 < introns.unique.bed | sort -t $'\t' -S 2G -k1,1 -k2,2n -k3,3n -k
 
 #cat bed.exons.exclude.anno-coding | awk 'BEGIN {FS="\t"; OFS="\t"} (($3-$2) < 120) {print}' > ref-short-exons.bed 
 
-echo "Build Ref 7"
+date +"%b %d %T ... building Ref 7..."
 
 cat <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "dir/" $4; print}' < tmp-dir.IntronCover.bed) \
   <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "nd/" $4; print}' < tmp-nd.IntronCover.bed) \
   <(awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "skip"; print}' < tmp.50) \
 | sort -t $'\t' -s -S 500M -k1,1 -k2,2n -k3,3n -k6,6 | uniq > ref-cover.bed
 
-echo "Build Ref 8"
+date +"%b %d %T ... building Ref 8..."
 
 #in Bedtools v2.26, chromosome-length file need to be sorted (sort -k1,1) according to chromosome names before being passed to complement function
 bedtools slop -b 10000 -g "$CHRLEN" -i tmp.all.annotations \
@@ -123,31 +125,31 @@ bedtools slop -b 10000 -g "$CHRLEN" -i tmp.all.annotations \
 | awk 'BEGIN {FS="\t"; OFS="\t"} (length($1)<=2) {$4 = "Intergenic/" $1; print $1, $2, $3, $4}' > intergenic.ROI.bed
 
 
-echo "Build Ref 9"
+date +"%b %d %T ... building Ref 9..."
 
 if [ -n "$OPTNONPOLYA" ]
 then
 	if [[ "$OPTNONPOLYA" == *.gz ]]
 	then
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed <(gzip -cd "$OPTNONPOLYA") | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-		echo "Build Ref 10a"
+		date +"%b %d %T ... building Ref 10a..."
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.ROI.rRNA.bed) -b <(gzip -cd "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) >> tmp.ROI.combined.bed
-		echo "Build Ref 11a"
+		date +"%b %d %T ... building Ref 11a..."
 		gzip -cd < "$OPTNONPOLYA" | awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "NonPolyA/" $1 "/" $2 "/" $3; print $1, $2, $3, $4}' >> tmp.ROI.combined.bed
-		echo "Build Ref 12a"
+		date +"%b %d %T ... building Ref 12a..."
 	else
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-		echo "Build Ref 10b"
+		date +"%b %d %T ... building Ref 10b..."
 		bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < tmp.ROI.rRNA.bed) -b <(cat "$OPTNONPOLYA" | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) >> tmp.ROI.combined.bed
-		echo "Build Ref 11b"
+		date +"%b %d %T ... building Ref 11b..."
 		awk 'BEGIN {FS="\t"; OFS="\t"} {$4 = "NonPolyA/" $1 "/" $2 "/" $3; print $1, $2, $3, $4}' < "$OPTNONPOLYA" >> tmp.ROI.combined.bed
-		echo "Build Ref 12b"
+		date +"%b %d %T ... building Ref 12b..."
 	fi
 else
 	bedtools intersect -v -sorted -a <(sort -t $'\t' -S 500M -k1,1 -k2,2n < intergenic.ROI.bed) -b <(cat tmp.ROI.rRNA.bed | cut -f 1-3 | sort -t $'\t' -S 500M -k1,1 -k2,2n) > tmp.ROI.combined.bed
-	echo "Build Ref 10c"
+	date +"%b %d %T ... building Ref 10c..."
 	cat tmp.ROI.rRNA.bed >> tmp.ROI.combined.bed
-	echo "Build Ref 11c"
+	date +"%b %d %T ... building Ref 11c..."
 fi
 sort -t $'\t' -S 500M -k1,1 -k2,2n -k3,3n < tmp.ROI.combined.bed > ref-ROI.bed
 
@@ -183,10 +185,11 @@ then
     echo "Error: ref-sj.ref is empty."
 fi
 
-if [ $ENDSTAT = 1 ]
+if [ $ENDSTAT -eq 1 ]
 then
-    echo "FAILED"
+    echo "Error: IRFinder reference building FAILED."
 else
+    #date +"%b %d %T ... cleaning temporary files..."
     rm tmp.50 tmp-dir.IntronCover.bed tmp-nd.IntronCover.bed tmp.read-continues tmp.candidate.introns tmp.exons.exclude tmp.all.annotations tmp.reversed.genes tmp.ROI.rRNA.bed tmp.ROI.combined.bed
-    echo "COMPLETE"
+    #echo "IRFinder reference building: COMPLETE."
 fi

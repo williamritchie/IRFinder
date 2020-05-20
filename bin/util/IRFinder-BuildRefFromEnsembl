@@ -5,6 +5,7 @@ use File::Spec;
 
 my $doDownload = 0;
 my $doCalculation = 0;
+my $doCalculationNoSTARRef = 0;
 
 my $mode = $ARGV[0];
 my $threads = $ARGV[1];
@@ -14,6 +15,7 @@ my $basedir = $ARGV[4];
 my $ercc_file = $ARGV[5];
 my $non_polyA = $ARGV[6];
 my $blacklist = $ARGV[7];
+my $sjdbOverlap = $ARGV[8];
 my ($script_volume, $script_dir, $script_name) = File::Spec->splitpath(__FILE__);
 $basedir = File::Spec->rel2abs($basedir);
 $script_dir = File::Spec->rel2abs($script_dir);
@@ -36,19 +38,26 @@ if ($ercc_file && length($ercc_file)>0) {
 if ($mode eq "BuildRef") {
 	$doDownload = 1;
 	$doCalculation = 1;
+	$doCalculationNoSTARRef = 0;
 }elsif ($mode eq "BuildRefDownload") {
 	$doDownload = 1;
 	$doCalculation = 0;
+	$doCalculationNoSTARRef = 0;
 }elsif ($mode eq "BuildRefProcess") {
 	$doDownload = 0;
 	$doCalculation = 1;
+	$doCalculationNoSTARRef = 0;
+}elsif ($mode eq "BuildRefFromSTARRef") {
+	$doDownload = 0;
+	$doCalculation = 0;
+	$doCalculationNoSTARRef = 1;
 }else {
 	die "Invalid mode specified. Valid options are: BuildRef / BuildRefDownload / BuildRefProcess.";
 }
 
 
-print 'Usage : ' . $0 . ' mode threads STAR-executable base_ftp_url_of_ensembl_genome+gtf output_directory(must not exist) additional_genome_reference(eg: ERCC) non_polyA_genes-as-bed region_blacklist-as-bed', "\n";
-print 'Usage example: ' . $0 . ' BuildRef 12 STAR "ftp://ftp.ensembl.org/pub/release-75/fasta/homo_sapiens/dna/" "IRFinder/REF/Human" "Refernce-ERCC.fa.gz" [non_polyA_genes.bed] [blacklist.bed]', "\n";
+#print 'Usage : ' . $0 . ' mode threads STAR-executable base_ftp_url_of_ensembl_genome+gtf output_directory(must not exist) additional_genome_reference(eg: ERCC) non_polyA_genes-as-bed region_blacklist-as-bed', "\n";
+#print 'Usage example: ' . $0 . ' BuildRef 12 STAR "ftp://ftp.ensembl.org/pub/release-75/fasta/homo_sapiens/dna/" "IRFinder/REF/Human" "Refernce-ERCC.fa.gz" [non_polyA_genes.bed] [blacklist.bed]', "\n";
 
 
 
@@ -179,6 +188,7 @@ if ($doDownload == 1) {
 }
 
 if ($doCalculation == 1) {
+	print "<Phase 1: STAR Reference Preparation>\n";
 
 	### Build the STAR reference ###
 	mkdir "$basedir/STAR" or die;
@@ -186,7 +196,7 @@ if ($doCalculation == 1) {
 	chdir "$basedir/logSTARbuild" or die;
 
 	# TODO -- perhaps should be user configurable.
-	my $sjdbOverlap = 150;
+	#my $sjdbOverlap = 150;
 
 	my $starresult = system(
 	$STAREXEC,
@@ -199,7 +209,12 @@ if ($doCalculation == 1) {
 	'&>>', "log-star-build-ref.log"
 	);
 
-	print "Star genome build result: $starresult\n";
+	if ($starresult>0){
+		print "Star genome build: Failed!\n";
+		exit;
+	}
+
+	#print "Star genome build: Successful.\n";
 
 	### Generate Mapability index ###
 	mkdir "$basedir/Mapability" or die;
@@ -215,7 +230,12 @@ if ($doCalculation == 1) {
 	'&>>', "log-mapability.log"
 	);
 
-	print "Mapability result: $mapresult\n";
+	if ($mapresult>0){
+		print "Mapability build: Failed!\n";
+		exit;
+	}
+
+	#print "Mapability build: Successful.\n";
 
 
 	### Run final calculations to produce IRFinder reference ###
@@ -234,7 +254,61 @@ if ($doCalculation == 1) {
 	'&>>', "log-ref-build.log"
 	);
 
-	print "Ref build result: $refresult\n";
-	print "ALL DONE\n";
+	if ($refresult>0){
+		print "IRFinder reference build: Failed!\n";
+		exit;
+	}
+
+	#print "IRFinder reference build: Successful.\n";
+	#print "ALL DONE.\n";
+	### DONE ###
+}
+
+if ($doCalculationNoSTARRef == 1) {
+	### Generate Mapability index ###
+	mkdir "$basedir/Mapability" or die;
+	chdir "$basedir/Mapability" or die;
+
+	my $mapresult = system(
+	"$script_dir/Mapability",
+	$STAREXEC,
+	"$basedir/STAR",
+	"$basedir/genome.fa",
+	$script_dir,
+	$threads,
+	'&>>', "log-mapability.log"
+	);
+
+	if ($mapresult>0){
+		print "Mapability build: Failed!\n";
+		exit;
+	}
+
+	#print "Mapability build: Successful.\n";
+
+
+	### Run final calculations to produce IRFinder reference ###
+	mkdir "$basedir/IRFinder" or die;
+	chdir "$basedir/IRFinder" or die;
+
+
+	my $refresult = system(
+	"$script_dir/Build-BED-refs.sh",
+	"$basedir/transcripts.gtf",
+	"$basedir/STAR/chrNameLength.txt",
+	"$basedir/Mapability/MapabilityExclusion.bed.gz",
+	$script_dir,
+	$non_polyA,
+	$blacklist,
+	'&>>', "log-ref-build.log"
+	);
+
+	if ($refresult>0){
+		print "IRFinder reference build: Failed!\n";
+		exit;
+	}
+
+	#print "IRFinder reference build: Successful.\n";
+	#print "ALL DONE.\n";
 	### DONE ###
 }
