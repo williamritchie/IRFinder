@@ -1,0 +1,114 @@
+#!/bin/bash
+
+export LC_ALL=C
+export LANG=C
+
+function usage() {
+	echo "Usage: TrimBAM4IGV -o OUTPUTDIR INPUT.bam" >&2
+	echo "Output: OUTPUTDIR/INPUT.trimmed.bam; OUTPUTDIR/INPUT.trimmed.bam.bai" >&2
+	echo "" >&2
+	echo "    -o OUTPUTDIR : required. Directory to save trimmed BAM." >&2
+	echo "    -r region : optional. A string to guide Samtools extracting reads in the corresponding region." >&2
+	echo "    -t NUM_THREADS : optional. Number of threads to use. Default: the number of physical CPUs." >&2
+	echo "    -h Show this usage information." >&2
+	exit 1
+}
+
+
+# === Defaults ===
+THREADS=0
+
+if [ $# -eq 0 ]; then
+	usage
+fi
+
+while getopts ":o:r:t:h" opt; do
+	case $opt in
+		o)
+			# Reference directory.
+			OUTPUTDIR=$OPTARG
+			;;
+		t)
+			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
+			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
+				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
+				exit 1
+			fi
+			THREADS=$OPTARG
+			;;
+		r)
+			REGIONS=$OPTARG
+			;;
+		h)
+			usage
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument." >&2
+			exit 1
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+#echo $@  #The remaining arguments.
+#echo $#  #The number of remaining arguments. 
+
+STVERSTR=`samtools --version`
+STVER=$(echo $STVERSTR|cut -d" " -f2)
+STVERMAIN=$(echo $STVER|cut -d"." -f1)
+STVERMINOR=$(echo $STVER|cut -d"." -f2)
+if [[ ! "$STVERMAIN" -ge 1 ]]; then
+	echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
+	exit 1
+elif [[ ! "$STVERMINOR" -ge 4 ]]; then
+	echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
+	exit 1
+fi
+
+if [ ! "$OUTPUTDIR" ]; then
+	echo "Argument error: -o is required." >&2
+	usage	
+fi
+
+if [ ! -d "$OUTPUTDIR" ]; then
+	mkdir "$OUTPUTDIR"
+fi
+
+# Auto detect CPUs.
+if [[ $THREADS == 0 ]]; then
+	THREADS=`awk 'BEGIN {FS=":"} ($0 ~ /^physical id/ ) { printf $2 " --"} ($0 ~ /^core id/) {print $2}' < /proc/cpuinfo | sort -u | wc -l`
+	if [ ! -n $THREADS -o $THREADS -eq 0 ]; then
+    	    	# If physical CPU detection doesn't work for some reason, detect virtual CPUs (includes hyperthreading instances).
+		THREADS=`grep -c ^processor /proc/cpuinfo`
+	fi
+fi
+
+SAMPLE=$(echo $1|awk 'BEGIN{FS=".bam"}{print $1}')
+
+if [ -f "$1"".bai" ]; then
+	if [ ! "$REGIONS" ]; then
+		samtools view -h "$1"|awk 'BEGIN{FS=OFS="\t"}(substr($0,1,1)=="@"){print $0}(substr($0,1,1)!="@"){print $1,$2,$3,$4,$5,$6,$7,$8,$9,"*","*"}' > "$OUTPUTDIR/tmp_sorted.trimmed.sam"
+	else
+		samtools view -h "$1" $REGIONS|awk 'BEGIN{FS=OFS="\t"}(substr($0,1,1)=="@"){print $0}(substr($0,1,1)!="@"){print $1,$2,$3,$4,$5,$6,$7,$8,$9,"*","*"}' > "$OUTPUTDIR/tmp_sorted.trimmed.sam"
+	fi
+else
+	echo "Warning: BAM index not found: the input BAM is treated as name-sorted and will be sorted by coordinate first. This might take a while." >&2
+	echo "         If the input BAM has already been sorted by coordinate, please index it and re-run this command." >&2
+	samtools sort -@ "$THREADS" "$1" > "$OUTPUTDIR/tmp_sorted.bam"
+	samtools index -@ "$THREADS" "$OUTPUTDIR/tmp_sorted.bam"
+	if [ ! "$REGIONS" ]; then
+		samtools view -h "$OUTPUTDIR/tmp_sorted.bam"|awk 'BEGIN{FS=OFS="\t"}(substr($0,1,1)=="@"){print $0}(substr($0,1,1)!="@"){print $1,$2,$3,$4,$5,$6,$7,$8,$9,"*","*"}' > "$OUTPUTDIR/tmp_sorted.trimmed.sam"
+	else
+		samtools view -h "$OUTPUTDIR/tmp_sorted.bam" $REGIONS|awk 'BEGIN{FS=OFS="\t"}(substr($0,1,1)=="@"){print $0}(substr($0,1,1)!="@"){print $1,$2,$3,$4,$5,$6,$7,$8,$9,"*","*"}' > "$OUTPUTDIR/tmp_sorted.trimmed.sam"
+	fi
+fi 
+
+samtools view -S -b "$OUTPUTDIR/tmp_sorted.trimmed.sam" > "$OUTPUTDIR/""$SAMPLE"".trimmed.bam"
+samtools index -@ "$THREADS" "$OUTPUTDIR/""$SAMPLE"".trimmed.bam"
+
+
+rm "$OUTPUTDIR"/tmp_sorted*
