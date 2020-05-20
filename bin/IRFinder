@@ -1,55 +1,85 @@
 #!/bin/bash
 
-VERSION=1.2.6
+VERSION=1.3.0
 
 
 export LC_ALL=C
 export LANG=C
 
 function usage() {
-        echo "IRFinder version: $VERSION" >&2
-	echo "Usage: $0 -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
-	echo "Usage: $0 -m BAM -r ReferenceDir Unsorted.bam" >&2
-	echo "Usage: $0 -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-89/gtf/mus_musculus/Mus_musculus.GRCm38.89.gtf.gz" >&2
+	echo "IRFinder version: $VERSION" >&2
+	echo "Usage: IRFinder -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
+	echo "Usage: IRFinder -m BAM -r ReferenceDir Unsorted.bam" >&2
+	echo "Usage: IRFinder -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-89/gtf/mus_musculus/Mus_musculus.GRCm38.89.gtf.gz" >&2
+	echo "Usage: IRFinder -m BuildRefFromSTARRef -r ReferenceDir" >&2
 	echo "" >&2
-        echo "    -v Show version number of current IRFinder." >&2
-	echo "    -m RunMode. FastQ (default), BAM, BuildRef," >&2
-	echo "             BuildRefDownload (performs phase 1 of BuildRef only, requires Internet)," >&2
-	echo "             BuildRefProcess (performs phase 2 of BuildRef only)." >&2
+	echo "    -v Show version number of current IRFinder." >&2
+	echo "    -h Show this usage information." >&2
+	echo "    -m RunMode. FastQ (default. Quantifies intron retention from FASTQ file);" >&2
+	echo "                BAM (quantifies intron retention from a name-sorted BAM file);" >&2
+	echo "                BuildRef (builds IRFinder reference from Ensembl FTP site. Requires Internet)," >&2
+	echo "                BuildRefDownload (only downloads FASTA and GTF files from Ensembl FTP site, without building IRFinder reference. Requires Internet)," >&2
+	echo "                BuildRefProcess (builds IRFinder reference from local FASTA and GTF files)," >&2
+	echo "                BuildRefFromSTARRef (builds IRFinder reference from a local STAR reference)." >&2
 	echo "" >&2
 	echo "Parameters for BuildRef mode:" >&2
 	echo "  required:" >&2
 	echo "    ftp://... A base Ensembl URL to a (gzipped) gtf file" >&2
-	echo "    -r ReferenceDir. Directory should not yet exist, will be created." >&2
+	echo "    -r ReferenceDir: Directory should not yet exist, will be created." >&2
 	echo "  optional:" >&2
+	echo "    -j INTEGER: an integer that is parsed to '--sjdbOverhang' under STAR 'genomeGenerate' mode. Default: 150." >&2
 	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
 	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
 	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2	
 	echo "" >&2
-        echo "Parameters for BuildRefProcess mode:" >&2
-        echo "  required:" >&2
-        echo "    -r ReferenceDir. Directory should already contain EXACT files named 'genome.fa' and 'transcripts.gtf' (case-sensitive) for genome and transcriptome annotations respectively." >&2
-        echo "  optional:" >&2
-        echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
-        echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
-        echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2
-        echo "" >&2
-	echo "Parameters for FastQ / BAM mode:" >&2
+	echo "Parameters for BuildRefProcess mode:" >&2
+	echo "  required:" >&2
+	echo "    -r ReferenceDir. Directory should already contain EXACT files named 'genome.fa' and 'transcripts.gtf' (case-sensitive) for genome and transcriptome annotations respectively." >&2
+	echo "  optional:" >&2
+	echo "    -j INTEGER: an integer that is parsed to '--sjdbOverhang' under STAR 'genomeGenerate' mode. Default: 150." >&2
+	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
+	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
+	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2
+	echo "" >&2
+	echo "" >&2
+	echo "Parameters for BuildRefFromSTARRef mode (read the following carefully when using this mode):" >&2
+	echo "  required:" >&2
+	echo "    -r ReferenceDir. A directory to store IRFinder reference." >&2
+	echo "    -x STARRefDir. An existing STAR reference folder." >&2
+	echo "       Please note: By default, BuildRefFromSTARRef mode automatically looks for the original FASTA and GTF files used to generate STARRefDir." >&2
+	echo "       Specifically, IRFinder investigates 'genomeParameters.txt' in STARRefDir." >&2
+	echo "       If both files can be located, IRFinder will continue to generate reference, ignoring '-f' and '-g' options." >&2
+	echo "       If either file is missing, IRFinder will quit and you have to re-run it by giving both '-f' and '-g' options." >&2
+	echo "  optional:" >&2
+	echo "    -f GENOME.fa: This MUST be the same FASTA file used to generate STARRefDir. Ignored when IRFinder can automatically locate the original file." >&2
+	echo "    -g TRANSCRIPTS.gtf: This MUST be the same GTF file used to generate STARRefDir. Ignored when IRFinder can automatically locate the original file." >&2
+	echo "    -e ExtraGenomeRef.fasta.gz: Typically an ERCC reference." >&2
+	echo "    -b Blacklist.bed.gz: BED of regions to be excluded from analysis." >&2
+	echo "    -R ROI.bed.gz: A non-overlapping BED file of additional Regions of Interest for read counts." >&2
+	echo "" >&2
+	echo "Parameters for FastQ mode:" >&2
 	echo "  required:" >&2
 	echo "    raw_reads_1.fastq.gz: Either single or paired end fastq file." >&2
 	# TODO - we cannot currently accept fasta input to the trimmer (only fastq), probably should, believe STAR ignores quality anyway, and we strip it on output.
 	echo "    Unsorted.bam: Mapped output, with pairs as sequential records. Paired end must not be coordinate sorted." >&2
 	echo "    -r ReferenceDir. As built by the 'BuildRef' option." >&2
 	echo "  optional:" >&2
-	echo "    -a Adaptor sequence. 'none' to disable. Default: Illumina Universal is trimmed." >&2
-	echo "    -t Threads. Default is the number of physical CPUs" >&2
-	echo "    -d Output Directory. Default is the current directory." >&2
-	echo "    -s STAR memory mode. NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
-	echo "    -S STAR executable. Default is 'STAR'." >&2
-	echo "    -u Unsorted output. Do not sort the read fragment BAM file. Default is to sort if" >&2 
-        echo "       a novosort license is present." >&2
+	echo "    -a Adaptor sequence: 'none' to disable. Default: Illumina Universal is trimmed." >&2
+	echo "    -t Threads: Default is the number of physical CPUs" >&2
+	echo "    -d Output Directory: Default is the current directory." >&2
+	echo "    -s STAR memory mode: NoSharedMemory (default), LoadAndKeep, LoadAndRemove." >&2
+	echo "    -S STAR executable: Default is 'STAR'." >&2
+	echo "    -y STRING: an extra string that is parsed to STAR for reads alignment." >&2
+	echo "    -u Unsorted output: Do not sort the read fragment BAM file. Default is to sort ONLY IF a novosort license is present." >&2 
 	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
-        exit 1
+	echo "Parameters for BAM mode:" >&2
+	echo "  required:" >&2
+	echo "    Unsorted.bam: Mapped output, with pairs as sequential records. Paired end must not be coordinate sorted." >&2
+	echo "    -r ReferenceDir: As built by the 'BuildRef' option." >&2
+	echo "  optional:" >&2
+	echo "    -t Threads: Default is the number of physical CPUs" >&2
+	echo "    -d Output Directory: Default is the current directory." >&2
+	exit 1
 }
 
 
@@ -60,6 +90,7 @@ THREADS=0
 REF=
 STAREXEC=STAR
 STARMEMORYMODE=NoSharedMemory
+SJOH=150
 BUILDERCCFILE=
 BUILDROI=
 BUILDBLACK=
@@ -69,6 +100,9 @@ DOSORT=1
 ADAPT=
 ADAPTTRIM=1
 FASTQ=0
+MYFASTA=
+MYGTF=
+STAREXTRA=
 
 LIBEXEC=$(dirname "$(readlink -nf "$BASH_SOURCE")")/util
 
@@ -77,14 +111,14 @@ if [ $# -eq 0 ]; then
 	usage
 fi
 
-while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
+while getopts ":m:r:j:x:f:g:a:t:d:s:S:uM:e:Eb:R:y:vh" opt; do
 	case $opt in
 		m)
-			if [[ $OPTARG == "BAM" || $OPTARG == "FastQ" || $OPTARG == "BuildRef" || $OPTARG == "BuildRefDownload" || $OPTARG == "BuildRefProcess" ]]; then
+			if [[ $OPTARG == "BAM" || $OPTARG == "FastQ" || $OPTARG == "BuildRef" || $OPTARG == "BuildRefDownload" || $OPTARG == "BuildRefProcess" || $OPTARG == "BuildRefFromSTARRef" ]]; then
 				RUNMODE=$OPTARG
 			else
 				echo "Argument error: -m $OPTARG. Valid options for Mode are: BAM, FastQ, BuildRef, BuildRefDownload, BuildRefProcess. Default: FastQ" >&2
-				usage
+				exit 1
 			fi
 			;;
 		r)
@@ -92,12 +126,33 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 			REF=$OPTARG
 			## Must be a directory. (or not exist ..? In case of BuildRef -- or should that be outputdir then?). Needs to be checked after all options are parsed.
 			;;
+		j)
+			if [[ $OPTARG =~ ^[0-9]+$ ]] ; then 
+				SJOH=$OPTARG
+			else
+				echo "Argument error: -j $OPTARG. '$OPTARG' is not an integer." >&2
+				exit 1
+			fi
+			;;
+		x)
+			#
+			STARREF=$OPTARG
+			## Must be a directory
+			;;
+		f)
+			# The original FASTA file to generate STAR reference.
+			MYFASTA=$OPTARG
+			;;
+		g)
+			# The original GTF file to generate STAR reference.
+			MYGTF=$OPTARG
+			;;
 		a)
 			if [[ $OPTARG == "none" || $OPTARG == "off" ]]; then
 				ADAPTTRIM=0
 			elif [[ ! $OPTARG =~ ^[ATGCN,]*$ ]]; then
 				echo "Argument error: -a $OPTARG. Adaptor may only contain [ATGCN]. Separate Adaptors with a comma for paired end." >&2
-				usage
+				exit 1
 			else
 				ADAPT=$OPTARG
 			fi
@@ -106,7 +161,7 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 			## Number of threads to use. (must be a positive integer. Zero ok, means auto-detect.)
 			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
 				echo "Argument error: -t $OPTARG, number of threads must be an integer." >&2
-				usage
+				exit 1
 			fi
 			THREADS=$OPTARG
 			;;
@@ -119,7 +174,7 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 				STARMEMORYMODE=$OPTARG
 			else
 				echo "Argument error: -s $OPTARG. Valid options for STAR memory mode are: NoSharedMemory, LoadAndKeep, LoadAndRemove. Default: NoSharedMemory" >&2
-				usage
+				exit 1
 			fi
 			;;
 		S)
@@ -128,7 +183,7 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 				STAREXEC=$OPTARG
 			else
 				echo "Argument error: -S $OPTARG. STAR executable must be an executable program." >&2
-				usage
+				exit 1
 			fi
 			;;
 		u)
@@ -138,15 +193,18 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 			#Max sort memory in MB.
 			if [[ ! $OPTARG =~ ^[0-9]+$ ]]; then
 				echo "Argument error: -M $OPTARG, maximum sort RAM in MB must be an integer." >&2
-				usage
+				exit 1
 			fi
 			SORTMEM=$OPTARG
+			;;
+		y)
+			STAREXTRA=$OPTARG
 			;;
 		e)
 			#ERCC file. (must be a file)
 			if [ ! -f "$OPTARG" ]; then
 				echo "Argument error: -e $OPTARG. Specified ERCC/extra-reference file does not exist." >&2
-				usage
+				exit 1
 			fi
 			BUILDERCCFILE=$OPTARG
 			;;
@@ -154,7 +212,7 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 			#Blacklist local file (must be a file)
 			if [ ! -f "$OPTARG" ]; then
 				echo "Argument error: -b $OPTARG. Specified blacklist file does not exist." >&2
-				usage
+				exit 1
 			fi
 			BUILDBLACK=$OPTARG
 			;;
@@ -162,21 +220,24 @@ while getopts ":m:r:a:t:d:s:S:uM:e:Eb:R:v" opt; do
 			#ROI local file. (must be a file)
 			if [ ! -f "$OPTARG" ]; then
 				echo "Argument error: -R $OPTARG. Specified ROI file does not exist." >&2
-				usage
+				exit 1
 			fi
 			BUILDROI=$OPTARG
 			;;
-                v)
-                        echo "IRFinder version: $VERSION" >&2
-                        exit
-                        ;;
+		v)
+			echo "IRFinder version: $VERSION" >&2
+			exit
+			;;
+		h)
+			usage
+			;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
-			usage
+			exit 1
 			;;
 		:)
 			echo "Option -$OPTARG requires an argument." >&2
-			usage
+			exit 1
 			;;
 	esac
 done
@@ -187,7 +248,7 @@ shift $(($OPTIND - 1))
 
 if [ ! "$REF" ]; then
 	echo "Argument error: -r is required." >&2
-	usage	
+	exit 1	
 fi
 
 MEMK=`awk '($1 ~ /^MemTotal:/) {print $2}' < /proc/meminfo`
@@ -220,46 +281,135 @@ fi
 if [[ "$RUNMODE" == "BuildRef" ]]; then
 	if [ ! $# -eq 1 ]; then
 		echo "Argument error: in run mode BuildRef, provide a single ftp URL. $# arguments found." >&2
-		usage
+		exit 1
 	fi
 	BUILDHINT=$1
 	if [[ "$BUILDHINT" != ftp* ]]; then
 		echo "Argument error: A single ftp url is required to find and download genome fasta and gtf files. eg: ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/." >&2
-		usage
+		exit 1
  	fi
 	if [ -d "$REF" ]; then
 		echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
-		usage
+		exit 1
 	fi
-	echo "Launching reference build process. The full build should take at least one hour."
-	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+	echo "Launching reference build process. The full build might take hours."
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
 elif [[ "$RUNMODE" == "BuildRefDownload" ]]; then
 	if [ ! $# -eq 1 ]; then
 		echo "Argument error: in run mode BuildRef, provide a single ftp URL. $# arguments found." >&2
-		usage
+		exit 1
 	fi
 	BUILDHINT=$1
 	if [[ "$BUILDHINT" != ftp* ]]; then
 		echo "Argument error: A single ftp url is required to find and download genome fasta and gtf files. eg: ftp://ftp.ensembl.org/pub/release-78/fasta/mus_musculus/dna/." >&2
-		usage
+		exit 1
  	fi
 	if [ -d "$REF" ]; then
 		echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
-		usage
+		exit 1
 	fi
 	echo "Launching reference build download process."
-	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
 elif [[ "$RUNMODE" == "BuildRefProcess" ]]; then
 	if [ ! -f "$REF/genome.fa" ] || [ ! -f "$REF/transcripts.gtf" ]; then
 		echo "Argument error: -r $REF. Reference directory must exist and contain genome.fa and transcripts.gtf files. Use the BuildRefDownload run mode to create these." >&2
-		usage
+		exit 1
 	fi
 	if [ -d "$REF/STAR" ] || [ -d "$REF/Mapability" ] || [ -d "$REF/IRFinder" ]; then
 		echo "Argument error: -r $REF. Will not overwrite. It appears BuildRefProcess has already been run for this reference. Reference directory must not contain STAR, Mapability or IRFinder directories." >&2
-		usage
+		exit 1
 	fi
-	echo "Launching reference build process. The full build should take at least one hour."
-	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK"
+	echo "Launching reference build process. The full build might take hours."
+	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
+elif [[ "$RUNMODE" == "BuildRefFromSTARRef" ]]; then
+	STVERSTR=`samtools --version`
+	STVER=$(echo $STVERSTR|cut -d" " -f2)
+	STVERMAIN=$(echo $STVER|cut -d"." -f1)
+	STVERMINOR=$(echo $STVER|cut -d"." -f2)
+	if [[ ! "$STVERMAIN" -ge 1 ]]; then
+		echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
+		exit 1
+	elif [[ ! "$STVERMINOR" -ge 4 ]]; then
+		echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
+		exit 1
+	fi
+	if [ ! "$STARREF" ]; then
+		echo "Argument error: -x is required. Must provide an exisiting STAR reference folder for BuildRefProcess mode." >&2
+		exit 1
+	fi
+	if [ ! -d "$STARREF" ]; then
+		echo "Error: STAR reference at $STARREF does not exist." >&2
+		exit 1
+	fi
+	if [ ! -f "$STARREF/genomeParameters.txt" ] && [ ! "$MYFASTA" ] && [ ! "$MYGTF" ]; then
+		echo "Error: Cannot locate the original FASTA and GTF files used to generate STAR reference at $STARREF." >&2
+		echo "       Please provide these two files through '-f' and '-g' options respectively." >&2
+		echo "       Or retry to build IRFinder reference in other modes." >&2
+		echo "       Run 'IRFinder -h' for more details." >&2
+		exit 1
+	fi
+	#get the original fasta and gtf file used to generate STAR reference using the parameters saved in 'genomeParameters.txt'
+	STARLINE=$(head -n 1 $STARREF/genomeParameters.txt)
+	STARTMP1=(${STARLINE#*--genomeFastaFiles })
+	STARTMP2=(${STARLINE#*--sjdbGTFfile })
+	ORIFASTA=${STARTMP1[0]}
+	ORIGTF=${STARTMP2[0]}
+	if [ ! -f "$ORIFASTA" ] || [ ! -f "$ORIGTF" ]; then
+		if [ ! "$MYFASTA" ] || [ ! "$MYGTF" ]; then
+			echo "Error: Cannot locate the original FASTA and GTF files used to generate the STAR reference $STARREF" >&2
+			echo "       at the following locations:" >&2
+			echo "       FASTA: $ORIFASTA" >&2
+			echo "       GTF: $ORIGTF" >&2
+			echo "       Please locate these two files through '-f' and '-g' options respectively." >&2
+			echo "       Or retry to build IRFinder reference in other modes." >&2
+			echo "       Run 'IRFinder -h' for more details." >&2
+			exit 1
+		else
+			if [ ! -f "$MYFASTA" ]; then
+				echo "Error: -f GENOME.fa. Cannot locate the FASTA file at:" >&2
+				echo "       $MYFASTA" >&2
+				exit 1
+			elif [ ! -f "$MYGTF" ]; then
+				echo "Error: -g TRANSCRIPTS.gtf. Cannot locate the GTF file at:" >&2
+				echo "       $MYGTF" >&2
+				exit 1
+			else
+				if [ -d "$REF" ]; then
+					echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
+					exit 1
+				else
+					echo "Launching reference build process. The full build might take hours."
+					echo "<Phase 1: STAR Reference Preparation>"
+					mkdir "$REF"
+					date +"%b %d %T ... copying the genome FASTA file..."
+					cp "$MYFASTA" "$REF/genome.fa"
+					date +"%b %d %T ... copying the transcriptome GTF file..."
+					cp "$MYGTF" "$REF/transcripts.gtf"
+					date +"%b %d %T ... copying the STAR reference folder..."
+					cp -r "$STARREF" "$REF/STAR"
+					"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
+				fi
+			fi
+		fi
+	else
+		MYFASTA=$ORIFASTA
+		MYGTF=$ORIGTF
+		if [ -d "$REF" ]; then
+			echo "Argument error: -r $REF. Reference directory must not exist, BuildRef will create it." >&2
+			exit 1
+		else
+			echo "Launching reference build process. The full build might take hours."
+			echo "<Phase 1: STAR Reference Preparation>"
+			mkdir "$REF"
+			date +"%b %d %T ... copying the genome FASTA file..."
+			cp "$MYFASTA" "$REF/genome.fa"
+			date +"%b %d %T ... copying the transcriptome GTF file..."
+			cp "$MYGTF" "$REF/transcripts.gtf"
+			date +"%b %d %T ... copying the STAR reference folder..."
+			cp -r "$STARREF" "$REF/STAR"
+			"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
+		fi
+	fi
 else
 	## Either fastq or BAM expected -- check other relevant parameters.
 	if [[ "$RUNMODE" == "FastQ" ]]; then
@@ -268,7 +418,7 @@ else
 			#Single End
 			if [ ! -f "$1" ] && [ ! -p "$1" ]; then
 				echo "Argument error: FastQ file $1 does not exist (single fastq provided)." >&2
-				usage
+				exit 1
 			fi
 			if [[ "$ADAPTTRIM" == 1 ]]; then
 				if [ ! $ADAPT ]; then
@@ -277,7 +427,7 @@ else
 					ADAPT=$ADAPT
 				else
 					echo "Argument error: -a $ADAPT. Single end mode, just one adaptor needs to be provided. eg: AGATCGGAAG." >&2
-					usage
+					exit 1
 				fi
 			fi
 		elif [ $# -eq 2 ]; then
@@ -285,11 +435,11 @@ else
 			#Paired End.
 			if [ ! -f "$1" ] && [ ! -p "$1" ]; then
 				echo "Argument error: FastQ file $1 does not exist (paired fastq provided)." >&2
-				usage
+				exit 1
 			fi
 			if [ ! -f "$2" ] && [ ! -p "$2" ]; then
 				echo "Argument error: FastQ file $2 does not exist (paired fastq provided)." >&2
-				usage
+				exit 1
 			fi
 			if [[ "$ADAPTTRIM" == 1 ]]; then
 				if [ ! $ADAPT ]; then
@@ -299,39 +449,39 @@ else
 					ADAPT=${ADAPT//,/ }
 				else
 					echo "Argument error: -a $ADAPT. Paired end mode, two adaptors need to be provided separated by a comma. eg: AGATCGGAAG,AGATCGGAAG." >&2
-					usage
+					exit 1
 				fi
 			fi
 		else
 			echo "Argument error: in run mode $RUNMODE, provide either one or two fastq files. $# arguments found." >&2
-			usage
+			exit 1
 		fi
 	elif [[ "$RUNMODE" == "BAM" ]]; then
 		if [ ! $# -eq 1 ]; then
 			echo "Argument error: in run mode BAM, provide a single BAM as input. $# arguments found." >&2
-			usage
+			exit 1
 		fi
 	else
 		echo "ERROR: coding error. This condition should not occur. At line: $LINENO in $0" >&2
-		usage
+		exit 1
 	fi
 
 	if [ ! -f "$REF/IRFinder/ref-cover.bed" ]; then
 		echo "Argument error: -r $REF, Does not appear to be a valid IRFinder reference. Could not find $REF/IRFinder/ref-cover.bed" >&2
-		usage
+		exit 1
 	fi
 
 	# Output directory OK?
 	if [ -d "$OUTPUTDIR" ]; then
 		if [ -e "$OUTPUTDIR/IRFinder-IR-nondir.txt" -o -e "$OUTPUTDIR/irfinder.stdout" ]; then
 			echo "Argument error: -d $OUTPUTDIR, output directory contains files from a previous IRFinder run. Will not overwrite." >&2
-			usage
+			exit 1
 		fi
 	else
 		mkdir "$OUTPUTDIR"
 		if [ ! -d "$OUTPUTDIR" ]; then
 			echo "Argument error: Output directory $OPTARG does not exist, and could not be created." >&2
-			usage
+			exit 1
 		fi
 	fi
 
@@ -408,8 +558,8 @@ else
 			--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 			--outSAMstrandField intronMotif \
 			--outFileNamePrefix "${OUTPUTDIR}/" \
-			--outSAMunmapped None --outSAMmode NoQS \
-			--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+			--outSAMunmapped None \
+			--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 			--readFilesIn "$1" $EXTRAREADFILESCOMMAND $EXTRAADAPT \
 			| tee "$OUTPUTDIR/Unsorted.bam" \
 			| gzip -cd \
@@ -426,15 +576,15 @@ else
 			--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 			--outSAMstrandField intronMotif \
 			--outFileNamePrefix "${OUTPUTDIR}/" \
-			--outSAMunmapped None --outSAMmode NoQS \
-			--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+			--outSAMunmapped None \
+			--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 			--readFilesIn "$1" $EXTRAREADFILESCOMMAND $EXTRAADAPT \
 			| tee "$OUTPUTDIR/Unsorted.bam" \
 			| gzip -cd \
 			| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
 			"$REF/IRFinder/ref-sj.ref" \
 			"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
-			"$OUTPUTDIR/unsorted.frag.bam" \
+			"NULL" \
 			>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
 		
 		fi
@@ -459,8 +609,8 @@ else
 				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 				--outSAMstrandField intronMotif \
 				--outFileNamePrefix "${OUTPUTDIR}/" \
-				--outSAMunmapped None --outSAMmode NoQS \
-				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--outSAMunmapped None \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 				--readFilesIn "$FIFO1" "$FIFO2" \
 				| tee "$OUTPUTDIR/Unsorted.bam" \
 				| gzip -cd \
@@ -476,15 +626,15 @@ else
 				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 				--outSAMstrandField intronMotif \
 				--outFileNamePrefix "${OUTPUTDIR}/" \
-				--outSAMunmapped None --outSAMmode NoQS \
-				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--outSAMunmapped None \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 				--readFilesIn "$FIFO1" "$FIFO2" \
 				| tee "$OUTPUTDIR/Unsorted.bam" \
 				| gzip -cd \
 				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
 				"$REF/IRFinder/ref-sj.ref" \
 				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
-				"$OUTPUTDIR/unsorted.frag.bam" \
+				"NULL" \
 				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"			
 			fi		
 
@@ -504,8 +654,8 @@ else
 				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 				--outSAMstrandField intronMotif \
 				--outFileNamePrefix "${OUTPUTDIR}/" \
-				--outSAMunmapped None --outSAMmode NoQS \
-				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--outSAMunmapped None \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 				--readFilesIn "$1" "$2" $EXTRAREADFILESCOMMAND \
 				| tee "$OUTPUTDIR/Unsorted.bam" \
 				| gzip -cd \
@@ -521,15 +671,15 @@ else
 				--genomeDir "$REF/STAR" --outFilterMultimapNmax 1 \
 				--outSAMstrandField intronMotif \
 				--outFileNamePrefix "${OUTPUTDIR}/" \
-				--outSAMunmapped None --outSAMmode NoQS \
-				--outSAMtype BAM Unsorted --outStd BAM_Unsorted \
+				--outSAMunmapped None \
+				--outSAMtype BAM Unsorted --outStd BAM_Unsorted $STAREXTRA \
 				--readFilesIn "$1" "$2" $EXTRAREADFILESCOMMAND \
 				| tee "$OUTPUTDIR/Unsorted.bam" \
 				| gzip -cd \
 				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
 				"$REF/IRFinder/ref-sj.ref" \
 				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
-				"$OUTPUTDIR/unsorted.frag.bam" \
+				"NULL" \
 				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"						
 			fi		
 		fi
@@ -550,12 +700,12 @@ else
 				| "$LIBEXEC/irfinder" "$OUTPUTDIR" "$REF/IRFinder/ref-cover.bed" \
 				"$REF/IRFinder/ref-sj.ref" \
 				"$REF/IRFinder/ref-read-continues.ref" "$REF/IRFinder/ref-ROI.bed" \
-				"$OUTPUTDIR/unsorted.frag.bam" \
+				"NULL" \
 				>>"$OUTPUTDIR/irfinder.stdout" 2>>"$OUTPUTDIR/irfinder.stderr"
 			fi
 	else
 		echo "ERROR: coding error. This condition should not occur. At line: $LINENO in $0" >&2
-		usage
+		exit 1
 	fi
 
 	"$LIBEXEC/warnings" "$OUTPUTDIR"
