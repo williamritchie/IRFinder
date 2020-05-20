@@ -337,17 +337,6 @@ elif [[ "$RUNMODE" == "BuildRefProcess" ]]; then
 	echo "Launching reference build process. The full build might take hours."
 	"$LIBEXEC/IRFinder-BuildRefFromEnsembl" "$RUNMODE" "$THREADS" "$STAREXEC" "$BUILDHINT" "$REF" "$BUILDERCCFILE" "$BUILDROI" "$BUILDBLACK" "$SJOH"
 elif [[ "$RUNMODE" == "BuildRefFromSTARRef" ]]; then
-	STVERSTR=`samtools --version`
-	STVER=$(echo $STVERSTR|cut -d" " -f2)
-	STVERMAIN=$(echo $STVER|cut -d"." -f1)
-	STVERMINOR=$(echo $STVER|cut -d"." -f2)
-	if [[ ! "$STVERMAIN" -ge 1 ]]; then
-		echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
-		exit 1
-	elif [[ ! "$STVERMINOR" -ge 4 ]]; then
-		echo "Error: Samtools $STVER: version too old (>=1.4 required)." >&2
-		exit 1
-	fi
 	if [ ! "$STARREF" ]; then
 		echo "Argument error: -x is required. Must provide an exisiting STAR reference folder for BuildRefProcess mode." >&2
 		exit 1
