@@ -16,10 +16,9 @@ mkdir "$TMPBED"
 
 TMPCMP=gzip
 TMPEXT=gz
-if [ -x /usr/bin/lzop ]
-then
+if [ -x /usr/bin/lzop ]; then
   TMPCMP=/usr/bin/lzop
-  TMPEXT=lzop
+  TMPEXT=lzo
 fi
 
 
@@ -51,7 +50,11 @@ cat "$STARGENOME/chrName.txt" | \
 
 date +"%b %d %T ... merging filtered genome fragments..."
 
-find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|xargs --max-args 1 zcat >> genome_fragments.unsorted.bed
+if [ "$TMPEXT" == "gz" ]; then
+    find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|xargs --max-args 1 zcat >> genome_fragments.unsorted.bed
+elif [ "$TMPEXT" == "lzo" ]; then
+    find "$TMPBED" -type f -name "*.bed.""$TMPEXT"|xargs --max-args 1 lzop -cdf >> genome_fragments.unsorted.bed
+fi
 
 date +"%b %d %T ... calculating regions for exclusion..."
 
