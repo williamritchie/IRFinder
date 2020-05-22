@@ -71,6 +71,7 @@ function usage() {
 	echo "    -y STRING: an extra string that is parsed to STAR for reads alignment." >&2
 	echo "    -u Unsorted output: Do not sort the read fragment BAM file. Default is to sort ONLY IF a novosort license is present." >&2 
 	echo "    -M Sort memory. Maximum memory to use for sort, in MB. Default, auto-detected no greater than 10,000MB." >&2
+	echo "" >&2
 	echo "Parameters for BAM mode:" >&2
 	echo "  required:" >&2
 	echo "    Unsorted.bam: Mapped output, with pairs as sequential records. Paired end must not be coordinate sorted." >&2
