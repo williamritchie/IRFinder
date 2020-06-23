@@ -3,13 +3,14 @@ Detecting intron retention from RNA-Seq experiments
 
 [User Manual](https://github.com/williamritchie/IRFinder/wiki)
 
-**1.3.1**
+**1.3.1**    
 1. IRFinder now exits immediately after error, instead of trying to complete the remaining processes.    
     
 **1.3.0**    
 New features:    
 1. New `BuildRefFromSTARRef` mode. This allows users to use an existing STAR reference to build IRFinder reference, which significantly reduces the total preparation time. This new mode also tries to automatically figure out the original FASTA and GTF files used to generate the existing STAR reference. Call `IRFinder -h` for more details.    
 2. `BuildRef` and `BuildRefProcess` mode now support `-j` option to parse an integer that changes the default value of `--sjdbOverhang` argument in STAR.    
+3. `FASTQ` mode supports `-y` option to feed extra STAR arguments to control alignment behaviors.
     
 Improvements:    
 1. `FASTQ` mode now outputs a full BAM file in "Unsorted.bam", instead of a BAM file with a trimmed QS column.   
