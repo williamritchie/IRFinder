@@ -9,7 +9,7 @@ New features:
 2. `BuildRef` and `BuildRefProcess` mode now support `-j` option to parse an integer that changes the default value of `--sjdbOverhang` argument in STAR.    
     
 Improvements:    
-1. `BAM` mode now outputs a full BAM file in "Unsorted.bam", instead of a BAM file with a trimmed QS column.   
+1. `FASTQ` mode now outputs a full BAM file in "Unsorted.bam", instead of a BAM file with a trimmed QS column.   
 2. IRFinder does not automatically generate "unsorted.frag.bam" to save disk space and to avoid redundancy to "Unsorted.bam". Instead, IRFinder now provides a tool at `bin/TrimBAM4IGV` to generate this kind of trimmed BAM file to facilitate visualization purpose in IGV.     
 3. Re-design of standard output information during IRFinder reference preparation. It is easier to recognize occured errors now.    
 4. Usage information now can be viewed by `-h` option.     
