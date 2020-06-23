@@ -211,7 +211,7 @@ if ($doCalculation == 1) {
 
 	if ($starresult>0){
 		print "Star genome build: Failed!\n";
-		exit;
+		exit 1;
 	}
 
 	#print "Star genome build: Successful.\n";
@@ -232,7 +232,7 @@ if ($doCalculation == 1) {
 
 	if ($mapresult>0){
 		print "Mapability build: Failed!\n";
-		exit;
+		exit 1;
 	}
 
 	#print "Mapability build: Successful.\n";
@@ -256,7 +256,7 @@ if ($doCalculation == 1) {
 
 	if ($refresult>0){
 		print "IRFinder reference build: Failed!\n";
-		exit;
+		exit 1;
 	}
 
 	#print "IRFinder reference build: Successful.\n";
@@ -281,7 +281,7 @@ if ($doCalculationNoSTARRef == 1) {
 
 	if ($mapresult>0){
 		print "Mapability build: Failed!\n";
-		exit;
+		exit 1;
 	}
 
 	#print "Mapability build: Successful.\n";
@@ -305,7 +305,7 @@ if ($doCalculationNoSTARRef == 1) {
 
 	if ($refresult>0){
 		print "IRFinder reference build: Failed!\n";
-		exit;
+		exit 1;
 	}
 
 	#print "IRFinder reference build: Successful.\n";
