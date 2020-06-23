@@ -3,6 +3,9 @@ Detecting intron retention from RNA-Seq experiments
 
 [User Manual](https://github.com/williamritchie/IRFinder/wiki)
 
+**1.3.1**
+1. IRFinder now exits immediately after error, instead of trying to complete the remaining processes.    
+    
 **1.3.0**    
 New features:    
 1. New `BuildRefFromSTARRef` mode. This allows users to use an existing STAR reference to build IRFinder reference, which significantly reduces the total preparation time. This new mode also tries to automatically figure out the original FASTA and GTF files used to generate the existing STAR reference. Call `IRFinder -h` for more details.    
