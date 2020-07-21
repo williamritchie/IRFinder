@@ -3,6 +3,8 @@
 export LANG=C
 export LC_ALL=C
 
+set -e
+
 GTF=$1
 CHRLEN=$2
 MAPABILITYEXCL=$3

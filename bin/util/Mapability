@@ -4,6 +4,8 @@ ulimit -Su 4000
 export LANG=C
 export LC_ALL=C
 
+set -e
+
 STAREXEC=$1
 STARGENOME=$2
 FA=$3

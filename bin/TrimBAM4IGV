@@ -3,6 +3,8 @@
 export LC_ALL=C
 export LANG=C
 
+set -e
+
 function usage() {
 	echo "Usage: TrimBAM4IGV -o OUTPUTDIR INPUT.bam" >&2
 	echo "Output: OUTPUTDIR/INPUT.trimmed.bam; OUTPUTDIR/INPUT.trimmed.bam.bai" >&2
