@@ -5,6 +5,7 @@ Detecting intron retention from RNA-Seq experiments
 
 **1.3.1**    
 1. IRFinder now exits immediately after error, instead of trying to complete the remaining processes.    
+2. Improved Perl version judgement during Phase 3 of reference preparation.    
     
 **1.3.0**    
 New features:    
