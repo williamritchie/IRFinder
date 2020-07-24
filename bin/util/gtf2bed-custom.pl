@@ -26,12 +26,11 @@
 
 use Data::Dumper;
 use sort 'stable';
-#@versions = $];
-#$vmain = int($versions[0]);
-#$vsub = int($versions[1]);
 ($vmain,$vsub)=split /\./, $];
 if (int($vmain)==5 && int($vsub)<28000){
-	use sort '_mergesort';
+	$mysort='_mergesort';
+	use sort $mysort;
+	## Saving '_mergesort' to $mysort first can avoid Perl evulating the exact call of "use sort '_mergesort';", which will FAIL in versions >=5.28 where this sort method is no longer supported.
 	## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
 }
 
