@@ -26,10 +26,11 @@
 
 use Data::Dumper;
 use sort 'stable';
-@versions = $];
-$vmain = int($versions[0]);
-$vsub = int($versions[1]);
-if ($vmain==5 && $vsub<28000){
+#@versions = $];
+#$vmain = int($versions[0]);
+#$vsub = int($versions[1]);
+($vmain,$vsub)=split /\./, $];
+if (int($vmain)==5 && int($vsub)<28000){
 	use sort '_mergesort';
 	## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
 }

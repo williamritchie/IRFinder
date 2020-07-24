@@ -12,6 +12,7 @@ function usage() {
 	echo "Usage: IRFinder -r ReferenceDir raw_reads_1.fastq[.gz] [raw_reads_2.fastq[.gz]]" >&2
 	echo "Usage: IRFinder -m BAM -r ReferenceDir Unsorted.bam" >&2
 	echo "Usage: IRFinder -m BuildRef -r ReferenceDir ftp://ftp.ensembl.org/pub/release-89/gtf/mus_musculus/Mus_musculus.GRCm38.89.gtf.gz" >&2
+	echo "Usage: IRFinder -m BuildRefProcess -r ReferenceDir" >&2
 	echo "Usage: IRFinder -m BuildRefFromSTARRef -r ReferenceDir -x STARRefDir" >&2
 	echo "" >&2
 	echo "    -v Show version number of current IRFinder." >&2
