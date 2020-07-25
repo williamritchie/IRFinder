@@ -26,14 +26,7 @@
 
 use Data::Dumper;
 use sort 'stable';
-($vmain,$vsub)=split /\./, $];
-if (int($vmain)==5 && int($vsub)<28000){
-	$mysort='_mergesort';
-	use sort $mysort;
-	## Saving '_mergesort' to $mysort first can avoid Perl evulating the exact call of "use sort '_mergesort';", which will FAIL in versions >=5.28 where this sort method is no longer supported.
-	## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
-}
-
+use if $]<5.028, sort, '_mergesort'  ## Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
 
 $in = shift @ARGV;
 
