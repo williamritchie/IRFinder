@@ -5,7 +5,7 @@ VERSION=1.3.1
 export LC_ALL=C
 export LANG=C
 
-set -e
+#set -e
 
 function usage() {
 	echo "IRFinder version: $VERSION" >&2
@@ -496,7 +496,7 @@ else
 
 	if [[ $DOSORT == 1 ]]; then
 		#User has not disabled sort. Check if we have novosort to allow efficient sorting. Will not sort unless an efficient sort program is available.
-		NOVOSORTOK=`which novosort 2>/dev/null`
+                NOVOSORTOK=`which novosort 2>/dev/null`
 		NOVOSORTOK=`dirname $NOVOSORTOK 2>/dev/null`
 		if [ "$NOVOSORTOK" ]; then
 			if [ -f $NOVOSORTOK/novoalign.lic ]; then
