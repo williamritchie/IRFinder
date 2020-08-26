@@ -26,7 +26,7 @@
 
 use Data::Dumper;
 use sort 'stable';
-use if $]<5.028, sort, '_mergesort';  # Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
+use if $]<5.028, "sort", '_mergesort';  # Note the hash function is not stable on later versions of PERL. Must sort a hash on relevant values if stability is desired.
 
 $in = shift @ARGV;
 
