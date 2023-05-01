@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 #0	1	2	3						4	5	6	7	8	9	10		11
 #1      11868   14409   ENST00000456328/processed_transcript/DDX11L1    0       +       11868   14409   0       3       359,109,1189,   0,744,1352,

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use List::Util qw(sum max min);
 use Data::Dumper;
