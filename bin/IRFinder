@@ -496,8 +496,8 @@ else
 
 	if [[ $DOSORT == 1 ]]; then
 		#User has not disabled sort. Check if we have novosort to allow efficient sorting. Will not sort unless an efficient sort program is available.
-		NOVOSORTOK=`which novosort 2>/dev/null`
-		NOVOSORTOK=`dirname $NOVOSORTOK 2>/dev/null`
+		NOVOSORTOK=`which novosort 2>/dev/null || true`
+		NOVOSORTOK=`dirname $NOVOSORTOK 2>/dev/null || true`
 		if [ "$NOVOSORTOK" ]; then
 			if [ -f $NOVOSORTOK/novoalign.lic ]; then
 				NOVOSORTOK=$NOVOSORTOK/novoalign.lic
